@@ -5,7 +5,7 @@
  */
 export const BRAND = {
   name: "TradeCraft",
-  tagline: "Find work. Share work. Get hired.",
+  tagline: "Find work, Share work, Get hired.",
   description:
     "TradeCraft is the operating system for independent professionals, discover real opportunities, build a professional network, and run your work with AI-powered tools.",
 } as const;
