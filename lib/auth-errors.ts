@@ -23,3 +23,10 @@ const messages: Record<string, string> = {
   "auth/network-request-failed": "Network problem. Check your connection and try again.",
   "auth/operation-not-allowed": "This sign-in method is not enabled yet.",
 };
+
+export function friendlyAuthError(error: unknown): string {
+  if (error instanceof FirebaseError) {
+    return messages[error.code] ?? "Something went wrong. Please try again.";
+  }
+  return "Something went wrong. Please try again.";
+}
