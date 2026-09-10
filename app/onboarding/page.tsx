@@ -11,6 +11,7 @@ export default async function OnboardingPage() {
   const user = await getSessionUser(true);
   if (!user) redirect("/login");
   if (!user.emailVerified) redirect("/verify-email");
+    if (!user.privacyAccepted) redirect("/privacy-consent");
   if (user.onboarded) redirect("/dashboard");
 
   return (

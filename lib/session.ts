@@ -10,6 +10,7 @@ export type SessionUser = {
   uid: string;
   email: string | undefined;
   emailVerified: boolean;
+  privacyAccepted: boolean;
   onboarded: boolean;
   provider: string;
 };
@@ -24,6 +25,7 @@ export async function getSessionUser(checkRevoked = true): Promise<SessionUser |
       uid: decoded.uid,
       email: decoded.email,
       emailVerified: decoded.email_verified === true,
+      privacyAccepted: decoded.pv === true,
       onboarded: decoded.onb === true,
       provider:
         decoded.firebase?.sign_in_provider === "google.com"

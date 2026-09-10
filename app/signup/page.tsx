@@ -1,9 +1,9 @@
 "use client";
 
-// Sign-up page with an optional referral code field. The code is checked
-// live and, once the account and session exist, captured server-side.
-// A referral problem never blocks signup: it is shown honestly, and the
-// account is created either way.
+// Sign-up page with referral code field and required legal acceptance.
+// A referral or legal-recording problem never blocks signup itself: both
+// are attempted after the account and session exist, and failures are
+// honest but non-fatal.
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -12,6 +12,7 @@ import { signUpWithEmail, signInWithGoogle } from "@/lib/auth";
 import { friendlyAuthError } from "@/lib/auth-errors";
 import PasswordInput from "@/components/ui/password-input";
 import { getStoredRef, attemptReferralCapture } from "@/lib/referral-client";
+import { TERMS_VERSION } from "@/lib/legal-content";
 
 type ReferralStatus = "IDLE" | "CHECKING" | "VALID" | "INVALID";
 
@@ -22,16 +23,15 @@ export default function SignupPage() {
   const [confirm, setConfirm] = useState("");
   const [referral, setReferral] = useState("");
   const [referralStatus, setReferralStatus] = useState<ReferralStatus>("IDLE");
+  const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Prefill from a referral link captured anywhere on the site.
   useEffect(() => {
     const stored = getStoredRef();
     if (stored) setReferral(stored);
   }, []);
 
-  // Live code check, debounced so we do not query on every keystroke.
   useEffect(() => {
     const code = referral.trim().toUpperCase();
     if (!code) {
@@ -62,9 +62,31 @@ export default function SignupPage() {
     }
   }
 
+  async function afterAccountReady(idToken: string, referralCode: string) {
+    await startSession(idToken);
+    // Record legal acceptance. Best-effort: if it fails, the account still
+    // works and acceptance can be re-confirmed at onboarding (a later step).
+    try {
+      await fetch("/api/legal/accept", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ document: "terms", version: TERMS_VERSION }),
+      });
+    } catch {
+      // non-fatal
+    }
+    await attemptReferralCapture(referralCode || undefined);
+    router.push("/dashboard");
+    router.refresh();
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    if (!accepted) {
+      setError("Please accept the Terms of Service to continue.");
+      return;
+    }
     if (password.length < 8) {
       setError("Password must be at least 8 characters.");
       return;
@@ -77,12 +99,7 @@ export default function SignupPage() {
     try {
       const user = await signUpWithEmail(email, password);
       const idToken = await user.getIdToken();
-      await startSession(idToken);
-      // Capture runs after the session cookie exists, before entering.
-      // It swallows its own errors, so entry never blocks on a referral.
-      await attemptReferralCapture(referral.trim() || undefined);
-      router.push("/dashboard");
-      router.refresh();
+      await afterAccountReady(idToken, referral.trim());
     } catch (err) {
       setError(err instanceof Error ? err.message : friendlyAuthError(err));
     } finally {
@@ -92,14 +109,14 @@ export default function SignupPage() {
 
   async function handleGoogle() {
     setError("");
+    if (!accepted) {
+      setError("Please accept the Terms of Service to continue.");      return;
+    }
     setLoading(true);
     try {
       const user = await signInWithGoogle();
       const idToken = await user.getIdToken();
-      await startSession(idToken);
-      await attemptReferralCapture(referral.trim() || undefined);
-      router.push("/dashboard");
-      router.refresh();
+      await afterAccountReady(idToken, referral.trim());
     } catch (err) {
       setError(friendlyAuthError(err));
     } finally {
@@ -186,6 +203,26 @@ export default function SignupPage() {
               </p>
             )}
           </div>
+
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={accepted}
+              onChange={(e) => setAccepted(e.target.checked)}
+              className="mt-0.5 accent-neutral-900 dark:accent-white"
+            />
+            <span className="text-sm text-neutral-600 dark:text-neutral-400">
+              I agree to the{" "}
+              <Link
+                href="/terms"
+                target="_blank"
+                className="underline underline-offset-4 font-medium"
+              >
+                Terms of Service
+              </Link>
+              .
+            </span>
+          </label>
 
           {error && (
             <p className="text-sm text-red-600 dark:text-red-400" role="alert">

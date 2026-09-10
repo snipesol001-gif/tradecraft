@@ -76,9 +76,13 @@ export async function POST() {
     { merge: true }
   );
 
-  // Note for later phases: setCustomUserClaims REPLACES all existing custom
-  // claims. Any claim added in future phases must be set together here.
-  await getAuth(getAdminApp()).setCustomUserClaims(sessionUser.uid, { onb: true });
+    // setCustomUserClaims REPLACES all existing claims, so merge with what is
+  // already there (for example "pv" from the privacy consent step).
+  const authUser = await getAuth(getAdminApp()).getUser(sessionUser.uid);
+  await getAuth(getAdminApp()).setCustomUserClaims(sessionUser.uid, {
+    ...authUser.customClaims,
+    onb: true,
+  });
 
   return NextResponse.json({ ok: true });
 }

@@ -7,9 +7,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!user) {
     redirect("/login");
   }
-  // Gate order matters: identity first, then verification, then onboarding.
+  // Gate order: identity, verification, privacy consent, onboarding.
   if (!user.emailVerified) {
     redirect("/verify-email");
+  }
+  if (!user.privacyAccepted) {
+    redirect("/privacy-consent");
   }
   if (!user.onboarded) {
     redirect("/onboarding");
