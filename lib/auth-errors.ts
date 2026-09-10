@@ -14,9 +14,8 @@ const messages: Record<string, string> = {
   "auth/wrong-password": "Invalid email or password.",
   "auth/too-many-requests":
     "Too many attempts. Please wait a moment and try again.",
-"auth/unauthorized-domain":
+  "auth/unauthorized-domain":
     "Sign-in is not enabled for this website address yet. If you are the site owner, add this domain in the Firebase console.",
-    "Too many attempts. Please wait a moment and try again.",
   "auth/popup-closed-by-user": "The Google sign-in window was closed before finishing.",
   "auth/cancelled-popup-request": "The Google sign-in window was closed before finishing.",
   "auth/account-exists-with-different-credential":
@@ -24,10 +23,3 @@ const messages: Record<string, string> = {
   "auth/network-request-failed": "Network problem. Check your connection and try again.",
   "auth/operation-not-allowed": "This sign-in method is not enabled yet.",
 };
-
-export function friendlyAuthError(error: unknown): string {
-  if (error instanceof FirebaseError) {
-    return messages[error.code] ?? "Something went wrong. Please try again.";
-  }
-  return "Something went wrong. Please try again.";
-}
