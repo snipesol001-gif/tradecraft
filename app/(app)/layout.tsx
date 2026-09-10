@@ -7,5 +7,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!user) {
     redirect("/login");
   }
+  // Email/password users must verify before entering the app.
+  // Google users arrive verified, so they pass straight through.
+  if (!user.emailVerified) {
+    redirect("/verify-email");
+  }
   return <AppShell email={user.email ?? "your account"}>{children}</AppShell>;
 }

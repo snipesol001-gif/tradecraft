@@ -9,6 +9,7 @@ import { getAdminApp } from "./firebase-admin";
 export type SessionUser = {
   uid: string;
   email: string | undefined;
+  emailVerified: boolean;
   provider: string;
 };
 
@@ -21,6 +22,7 @@ export async function getSessionUser(checkRevoked = true): Promise<SessionUser |
     return {
       uid: decoded.uid,
       email: decoded.email,
+      emailVerified: decoded.email_verified === true,
       provider:
         decoded.firebase?.sign_in_provider === "google.com"
           ? "Google"
