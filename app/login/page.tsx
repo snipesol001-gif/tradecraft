@@ -18,7 +18,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function startSession(userEmail: string, idToken: string) {
+  async function startSession(idToken: string) {
     const res = await fetch("/api/auth/session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -38,7 +38,7 @@ export default function LoginPage() {
     try {
       const user = await signInWithEmail(email, password);
       const idToken = await user.getIdToken();
-      await startSession(user.email ?? "", idToken);
+      await startSession(idToken);
     } catch (err) {
       setError(err instanceof Error ? err.message : friendlyAuthError(err));
     } finally {
@@ -52,7 +52,7 @@ export default function LoginPage() {
     try {
       const user = await signInWithGoogle();
       const idToken = await user.getIdToken();
-      await startSession(user.email ?? "", idToken);
+      await startSession(idToken);
     } catch (err) {
       setError(friendlyAuthError(err));
     } finally {
@@ -89,9 +89,17 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <label htmlFor="password" className="block text-sm font-medium mb-1">
-              Password
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label htmlFor="password" className="block text-sm font-medium">
+                Password
+              </label>
+              <Link
+                href="/forgot-password"
+                className="text-xs text-neutral-500 dark:text-neutral-400 hover:underline underline-offset-4"
+              >
+                Forgot password?
+              </Link>
+            </div>
             <PasswordInput
               id="password"
               required
