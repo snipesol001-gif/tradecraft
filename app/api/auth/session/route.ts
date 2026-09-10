@@ -35,7 +35,10 @@ export async function POST(req: NextRequest) {
       maxAge: SESSION_TTL_MS / 1000,
     });
     return res;
-  } catch {
+    } catch (error) {
+    // Logged server-side only, visible in Vercel's function logs, never
+    // shown to users. This is how credential problems get diagnosed.
+    console.error("[session] createSessionCookie failed:", error);
     return NextResponse.json(
       { ok: false, error: "Could not create a session from that token." },
       { status: 401 }
