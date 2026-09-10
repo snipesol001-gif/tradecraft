@@ -13,7 +13,8 @@ const messages: Record<string, string> = {
   "auth/user-not-found": "Invalid email or password.",
   "auth/wrong-password": "Invalid email or password.",
   "auth/too-many-requests":
-    "auth/unauthorized-domain":
+    "Too many attempts. Please wait a moment and try again.",
+"auth/unauthorized-domain":
     "Sign-in is not enabled for this website address yet. If you are the site owner, add this domain in the Firebase console.",
     "Too many attempts. Please wait a moment and try again.",
   "auth/popup-closed-by-user": "The Google sign-in window was closed before finishing.",
