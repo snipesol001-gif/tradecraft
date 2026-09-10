@@ -61,9 +61,13 @@ export default function VerifyEmailForm({ email }: { email: string }) {
     setCooldown(data.cooldownSeconds ?? 60);
     if (data.delivered) {
       setInfo(`We sent a 6-digit code to ${email}. It expires in ${data.expiresInMinutes} minutes.`);
+    } else if (process.env.NODE_ENV !== "production") {
+      setInfo(
+        "Delivery is not available for this address in test mode. The current code is printed in the VS Code terminal."
+      );
     } else {
       setInfo(
-        "Automatic delivery to this address is not available yet (email provider test mode). In development, the current code is printed in the VS Code terminal."
+        "This address cannot receive verification emails yet. Full email delivery is coming soon. You can continue with Google sign-in in the meantime."
       );
     }
   }

@@ -56,9 +56,11 @@ export default function ForgotPasswordForm() {
             If an account exists for <span className="font-medium break-all">{email}</span>,
             a 6-digit reset code has been sent. It expires in 15 minutes.
           </p>
-          <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-500">
-            In development, the code also appears in the VS Code terminal.
-          </p>
+          {process.env.NODE_ENV !== "production" && (
+            <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-500">
+              In development, the code also appears in the VS Code terminal.
+            </p>
+          )}
         </div>
         <button
           onClick={() => router.push(`/reset-password?email=${encodeURIComponent(email)}`)}
