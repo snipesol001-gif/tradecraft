@@ -6,6 +6,8 @@ import { NextResponse } from "next/server";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 
+export const runtime = "nodejs";
+
 export async function GET() {
   const key = process.env.FIREBASE_ADMIN_PRIVATE_KEY ?? "";
 
