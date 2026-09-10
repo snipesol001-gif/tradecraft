@@ -1,22 +1,55 @@
 "use client";
 
-// Sign-up page. Creates a TradeCraft account through Firebase Authentication,
-// then starts a server session and enters the app.
+// Sign-up page with an optional referral code field. The code is checked
+// live and, once the account and session exist, captured server-side.
+// A referral problem never blocks signup: it is shown honestly, and the
+// account is created either way.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signUpWithEmail, signInWithGoogle } from "@/lib/auth";
 import { friendlyAuthError } from "@/lib/auth-errors";
 import PasswordInput from "@/components/ui/password-input";
+import { getStoredRef, attemptReferralCapture } from "@/lib/referral-client";
+
+type ReferralStatus = "IDLE" | "CHECKING" | "VALID" | "INVALID";
 
 export default function SignupPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [referral, setReferral] = useState("");
+  const [referralStatus, setReferralStatus] = useState<ReferralStatus>("IDLE");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Prefill from a referral link captured anywhere on the site.
+  useEffect(() => {
+    const stored = getStoredRef();
+    if (stored) setReferral(stored);
+  }, []);
+
+  // Live code check, debounced so we do not query on every keystroke.
+  useEffect(() => {
+    const code = referral.trim().toUpperCase();
+    if (!code) {
+      setReferralStatus("IDLE");
+      return;
+    }
+    setReferralStatus("CHECKING");
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/referral/check?code=${encodeURIComponent(code)}`);
+        const data = await res.json();
+        setReferralStatus(data.valid ? "VALID" : "INVALID");
+      } catch {
+        setReferralStatus("IDLE");
+      }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [referral]);
 
   async function startSession(idToken: string) {
     const res = await fetch("/api/auth/session", {
@@ -27,8 +60,6 @@ export default function SignupPage() {
     if (!res.ok) {
       throw new Error("Account created, but the session could not start. Please sign in.");
     }
-    router.push("/dashboard");
-    router.refresh();
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -47,8 +78,13 @@ export default function SignupPage() {
       const user = await signUpWithEmail(email, password);
       const idToken = await user.getIdToken();
       await startSession(idToken);
+      // Capture runs after the session cookie exists, before entering.
+      // It swallows its own errors, so entry never blocks on a referral.
+      await attemptReferralCapture(referral.trim() || undefined);
+      router.push("/dashboard");
+      router.refresh();
     } catch (err) {
-      setError(friendlyAuthError(err));
+      setError(err instanceof Error ? err.message : friendlyAuthError(err));
     } finally {
       setLoading(false);
     }
@@ -61,6 +97,9 @@ export default function SignupPage() {
       const user = await signInWithGoogle();
       const idToken = await user.getIdToken();
       await startSession(idToken);
+      await attemptReferralCapture(referral.trim() || undefined);
+      router.push("/dashboard");
+      router.refresh();
     } catch (err) {
       setError(friendlyAuthError(err));
     } finally {
@@ -121,6 +160,31 @@ export default function SignupPage() {
               placeholder="Repeat your password"
               autoComplete="new-password"
             />
+          </div>
+          <div>
+            <label htmlFor="referral" className="block text-sm font-medium mb-1">
+              Referral code (optional)
+            </label>
+            <input
+              id="referral"
+              type="text"
+              autoComplete="off"
+              maxLength={12}
+              value={referral}
+              onChange={(e) => setReferral(e.target.value.toUpperCase())}
+              placeholder="From a friend's link"
+              className="w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-400 dark:focus:ring-neutral-600"
+            />
+            {referralStatus === "VALID" && (
+              <p className="mt-1 text-sm text-emerald-600 dark:text-emerald-400">
+                Valid referral code
+              </p>
+            )}
+            {referralStatus === "INVALID" && (
+              <p className="mt-1 text-sm text-amber-600 dark:text-amber-400">
+                We could not find that code. You can continue without it.
+              </p>
+            )}
           </div>
 
           {error && (

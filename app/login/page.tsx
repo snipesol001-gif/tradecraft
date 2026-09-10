@@ -2,7 +2,8 @@
 
 // Sign-in page. Security note: unknown email and wrong password show the
 // same message, so this form cannot reveal which emails have accounts.
-// On success it requests a server session cookie, then enters the app.
+// On success it starts a server session, attempts any pending referral
+// capture (only meaningful for brand-new accounts), then enters the app.
 
 import { useState } from "react";
 import Link from "next/link";
@@ -10,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { signInWithEmail, signInWithGoogle } from "@/lib/auth";
 import { friendlyAuthError } from "@/lib/auth-errors";
 import PasswordInput from "@/components/ui/password-input";
+import { attemptReferralCapture } from "@/lib/referral-client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -27,6 +29,13 @@ export default function LoginPage() {
     if (!res.ok) {
       throw new Error("Signed in, but the session could not start. Please try again.");
     }
+  }
+
+  async function enterApp(referralPossible: boolean) {
+    // For an existing account the server refuses with ATTRIBUTION_WINDOW_PASSED
+    // and the stored code is wiped. Cheap, safe, and covers new-Google-user
+    // via login. Skipped when signing out from the dashboard (no ref stored).
+    if (referralPossible) await attemptReferralCapture();
     router.push("/dashboard");
     router.refresh();
   }
@@ -39,6 +48,7 @@ export default function LoginPage() {
       const user = await signInWithEmail(email, password);
       const idToken = await user.getIdToken();
       await startSession(idToken);
+      await enterApp(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : friendlyAuthError(err));
     } finally {
@@ -53,6 +63,7 @@ export default function LoginPage() {
       const user = await signInWithGoogle();
       const idToken = await user.getIdToken();
       await startSession(idToken);
+      await enterApp(true);
     } catch (err) {
       setError(friendlyAuthError(err));
     } finally {

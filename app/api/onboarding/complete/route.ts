@@ -4,6 +4,7 @@
 // the client refreshes its session right after this succeeds, so the fresh
 // cookie carries it.
 
+import { ensureReferralCode } from "@/lib/referral";
 import { NextResponse } from "next/server";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
@@ -25,9 +26,13 @@ export async function POST() {
   if (!sessionUser) {
     return NextResponse.json({ ok: false, error: "NOT_SIGNED_IN" }, { status: 401 });
   }
-  if (!sessionUser.emailVerified) {
+    if (!sessionUser.emailVerified) {
     return NextResponse.json({ ok: false, error: "EMAIL_NOT_VERIFIED" }, { status: 403 });
   }
+  // Every onboarded user gets a referral code. Placed before the completed
+  // check, so re-calling complete also ensures the code exists. That is how
+  // accounts which completed onboarding earlier get theirs.
+  await ensureReferralCode(sessionUser.uid);
 
   const db = getFirestore(getAdminApp());
   const ref = db.collection("users").doc(sessionUser.uid);
