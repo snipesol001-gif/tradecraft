@@ -14,8 +14,7 @@ const navItems = [
   { label: "Scout", href: "/coming-soon?feature=Scout", icon: Radar },
   { label: "Leads", href: "/coming-soon?feature=Leads", icon: Bookmark },
   { label: "Notifications", href: "/coming-soon?feature=Notifications", icon: Bell },
-  { label: "Profile", href: "/coming-soon?feature=Profile", icon: User },
-];
+  { label: "Profile", href: "/profile", icon: User },];
 
 export default function AppShell({
   email,
@@ -63,9 +62,16 @@ export default function AppShell({
       </aside>
 
       {/* Mobile top bar */}
-      <header className="md:hidden sticky top-0 z-40 h-14 flex items-center px-4 border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950">
+      <header className="md:hidden sticky top-0 z-40 h-14 flex items-center justify-between px-4 border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950">
         <Link href="/dashboard" className="font-semibold tracking-tight">
           TradeCraft
+        </Link>
+        <Link
+          href="/profile"
+          aria-label="Profile"
+          className="p-2 -mr-2 text-neutral-600 dark:text-neutral-400"
+        >
+          <User size={20} />
         </Link>
       </header>
 
