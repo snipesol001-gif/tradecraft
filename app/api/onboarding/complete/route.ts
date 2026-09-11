@@ -1,15 +1,16 @@
 // Completes onboarding. Re-validates EVERY required field server-side
-// (never trust that earlier steps ran), then marks the account onboarded
-// and sets the "onb" custom claim. That claim is what the app gate reads;
-// the client refreshes its session right after this succeeds, so the fresh
-// cookie carries it.
+// (never trust that earlier steps ran), then marks the account onboarded,
+// sets the "onb" custom claim, ensures the referral code exists, and
+// resolves the new member's own incoming referral (rewards fire exactly
+// once, at this moment, by product decision).
 
-import { ensureReferralCode } from "@/lib/referral";
 import { NextResponse } from "next/server";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import { getAdminApp } from "@/lib/firebase-admin";
 import { getSessionUser } from "@/lib/session";
+import { ensureReferralCode } from "@/lib/referral";
+import { resolveReferralForUser } from "@/lib/referral-rewards";
 import {
   validateDisplayName,
   validateProfessionalTitle,
@@ -26,13 +27,9 @@ export async function POST() {
   if (!sessionUser) {
     return NextResponse.json({ ok: false, error: "NOT_SIGNED_IN" }, { status: 401 });
   }
-    if (!sessionUser.emailVerified) {
+  if (!sessionUser.emailVerified) {
     return NextResponse.json({ ok: false, error: "EMAIL_NOT_VERIFIED" }, { status: 403 });
   }
-  // Every onboarded user gets a referral code. Placed before the completed
-  // check, so re-calling complete also ensures the code exists. That is how
-  // accounts which completed onboarding earlier get theirs.
-  await ensureReferralCode(sessionUser.uid);
 
   const db = getFirestore(getAdminApp());
   const ref = db.collection("users").doc(sessionUser.uid);
@@ -76,13 +73,26 @@ export async function POST() {
     { merge: true }
   );
 
-    // setCustomUserClaims REPLACES all existing claims, so merge with what is
+  // setCustomUserClaims REPLACES all existing claims, so merge with what is
   // already there (for example "pv" from the privacy consent step).
   const authUser = await getAuth(getAdminApp()).getUser(sessionUser.uid);
   await getAuth(getAdminApp()).setCustomUserClaims(sessionUser.uid, {
     ...authUser.customClaims,
     onb: true,
   });
+
+  // Every onboarded user gets a referral code (idempotent).
+  await ensureReferralCode(sessionUser.uid);
+
+  // Resolve the new member's own incoming referral, if any. Non-fatal:
+  // onboarding completion must not fail because of a referral problem.
+  const referredUsername = typeof d.username === "string" ? d.username : null;
+  try {
+    const resolution = await resolveReferralForUser(sessionUser.uid, referredUsername);
+    console.log(`[referral] resolution for ${sessionUser.uid}: ${resolution.outcome}`);
+  } catch (error) {
+    console.error("[referral] resolution failed:", error);
+  }
 
   return NextResponse.json({ ok: true });
 }

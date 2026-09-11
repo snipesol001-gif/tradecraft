@@ -9,6 +9,11 @@
 // the reset inline, capped at one reset per pass: a user away for three
 // days returns to exactly one fresh allowance. No rollover.
 //
+// applyGrantInTx exposes the grant for callers that are already inside
+// their own transaction (the referral resolver), so a status flip and its
+// credit grants commit together atomically. It must only be used inside
+// db.runTransaction.
+//
 // Storage note: balances are flat top-level fields (creditBalance,
 // creditNextResetAt), not a nested map. set() with merge:true replaces a
 // whole nested map, which would let a concurrent grant clobber a
@@ -127,8 +132,7 @@ function writeLedgerEntry(
 }
 
 // Shared transaction body: loads the balance and applies the lazy daily
-// reset if it is due. Returns the up-to-date balance and next reset time,
-// plus whether a reset just happened (which itself writes a ledger entry).
+// reset if it is due. Returns the up-to-date balance and next reset time.
 async function loadAndReset(
   tx: Transaction,
   uid: string,
@@ -158,6 +162,32 @@ async function loadAndReset(
   }
 
   return { balance, nextResetAt };
+}
+
+// Grant inside a caller's transaction. Applies the lazy reset if due,
+// adds the amount, and writes the ledger entry. Returns the balance after.
+export async function applyGrantInTx(
+  tx: Transaction,
+  uid: string,
+  amount: number,
+  reason: CreditReason,
+  refId?: string,
+  actorUid?: string
+): Promise<number> {
+  if (!Number.isInteger(amount) || amount <= 0) {
+    throw new Error("applyGrantInTx requires a positive integer amount.");
+  }
+  const config = await getCreditsConfig();
+  const userRef = getFirestore(getAdminApp()).collection("users").doc(uid);
+  const before = await loadAndReset(tx, uid, userRef, config);
+  const balanceAfter = before.balance + amount;
+  tx.set(
+    userRef,
+    { creditBalance: balanceAfter, updatedAt: FieldValue.serverTimestamp() },
+    { merge: true }
+  );
+  writeLedgerEntry(tx, uid, amount, reason, balanceAfter, refId, actorUid);
+  return balanceAfter;
 }
 
 export async function getCreditState(uid: string): Promise<CreditState> {
