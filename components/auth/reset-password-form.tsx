@@ -1,11 +1,12 @@
 "use client";
 
-// Step 2 of the reset flow. Six-box code plus the new password, reusing
-// the code input and the password input with the eye toggle. On success
-// the server has already revoked every old session for this account.
+// Step 2 of the reset flow. Six-box code plus the new password. On
+// success the server has already revoked every old session for this
+// account.
 
 import { useState } from "react";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import CodeInput from "@/components/ui/code-input";
 import PasswordInput from "@/components/ui/password-input";
 
@@ -75,20 +76,17 @@ export default function ResetPasswordForm({ email }: { email: string }) {
   if (success) {
     return (
       <div className="space-y-4 text-center">
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950 p-4">
-          <h2 className="font-semibold text-emerald-700 dark:text-emerald-400">
-            Password updated
-          </h2>
-          <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
+        <div className="rounded-xl border border-success-border bg-success-soft p-4">
+          <h2 className="font-semibold text-success">Password updated</h2>
+          <p className="mt-2 text-sm text-text-muted">
             All previous sessions on every device were signed out for your
             protection.
           </p>
         </div>
-        <Link
-          href="/login"
-          className="block w-full rounded-md bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 font-medium py-2.5 text-sm hover:opacity-90"
-        >
-          Sign in with your new password
+        <Link href="/login" className="block">
+          <Button size="lg" className="w-full">
+            Sign in with your new password
+          </Button>
         </Link>
       </div>
     );
@@ -97,14 +95,14 @@ export default function ResetPasswordForm({ email }: { email: string }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <input type="hidden" name="email" value={email} />
-      <p className="text-sm text-neutral-500 dark:text-neutral-400 text-center">
+      <p className="text-center text-sm text-text-muted">
         Reset code sent to <span className="break-all">{email}</span>
       </p>
 
       <CodeInput value={code} onChange={setCode} />
 
       <div>
-        <label htmlFor="new-password" className="block text-sm font-medium mb-1">
+        <label htmlFor="new-password" className="mb-1.5 block text-sm font-medium text-text-primary">
           New password
         </label>
         <PasswordInput
@@ -117,7 +115,7 @@ export default function ResetPasswordForm({ email }: { email: string }) {
         />
       </div>
       <div>
-        <label htmlFor="confirm-password" className="block text-sm font-medium mb-1">
+        <label htmlFor="confirm-password" className="mb-1.5 block text-sm font-medium text-text-primary">
           Confirm new password
         </label>
         <PasswordInput
@@ -131,18 +129,14 @@ export default function ResetPasswordForm({ email }: { email: string }) {
       </div>
 
       {error && (
-        <p className="text-sm text-red-600 dark:text-red-400 text-center" role="alert">
+        <p className="text-center text-sm text-danger" role="alert">
           {error}
         </p>
       )}
 
-      <button
-        type="submit"
-        disabled={loading}
-        className="w-full rounded-md bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 font-medium py-2.5 text-sm hover:opacity-90 disabled:opacity-50"
-      >
+      <Button type="submit" size="lg" className="w-full" loading={loading}>
         {loading ? "Updating..." : "Set new password"}
-      </button>
+      </Button>
     </form>
   );
 }

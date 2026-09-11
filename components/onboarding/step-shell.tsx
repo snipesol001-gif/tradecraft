@@ -3,6 +3,8 @@
 // Shared frame for one onboarding step: progress bar, title, description,
 // and the Continue and Back buttons. Keeps every step visually identical.
 
+import { Button } from "@/components/ui/button";
+
 type StepShellProps = {
   step: number;
   totalSteps: number;
@@ -36,53 +38,47 @@ export default function StepShell({
 
   return (
     <div>
-      <div className="mb-6">
-        <div className="flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400">
+      <div className="mb-8">
+        <div className="flex items-center justify-between text-xs font-medium text-text-faint">
           <span>
             Step {step} of {totalSteps}
           </span>
-          <span>{percent}%</span>
+          <span className="tabular-nums">{percent}%</span>
         </div>
-        <div className="mt-2 h-1.5 w-full rounded-full bg-neutral-200 dark:bg-neutral-800">
+        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-sunken">
           <div
-            className="h-1.5 rounded-full bg-neutral-900 dark:bg-white transition-all"
+            className="h-full rounded-full bg-text-primary transition-all duration-300"
             style={{ width: `${percent}%` }}
           />
         </div>
       </div>
 
-      <h1 className="text-2xl font-bold">{title}</h1>
-      {description && (
-        <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">{description}</p>
-      )}
+      <h1 className="text-2xl font-bold tracking-tight text-text-primary">{title}</h1>
+      {description && <p className="mt-2 text-sm text-text-muted">{description}</p>}
 
       <div className="mt-6">{children}</div>
 
       {error && (
-        <p className="mt-4 text-sm text-red-600 dark:text-red-400" role="alert">
+        <p className="mt-4 text-sm text-danger" role="alert">
           {error}
         </p>
       )}
 
       <div className="mt-6 flex gap-3">
         {onBack && (
-          <button
-            type="button"
-            onClick={onBack}
-            disabled={busy}
-            className="rounded-md border border-neutral-300 dark:border-neutral-700 font-medium px-4 py-2.5 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-900 disabled:opacity-50"
-          >
+          <Button variant="secondary" size="lg" onClick={onBack} disabled={busy}>
             Back
-          </button>
+          </Button>
         )}
-        <button
-          type="button"
+        <Button
+          size="lg"
+          className="flex-1"
           onClick={onContinue}
-          disabled={continueDisabled || busy}
-          className="flex-1 rounded-md bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 font-medium py-2.5 text-sm hover:opacity-90 disabled:opacity-50"
+          disabled={continueDisabled}
+          loading={busy}
         >
           {busy ? busyLabel ?? "Working..." : continueLabel ?? "Continue"}
-        </button>
+        </Button>
       </div>
     </div>
   );
