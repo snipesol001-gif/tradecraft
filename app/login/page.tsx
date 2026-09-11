@@ -10,6 +10,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signInWithEmail, signInWithGoogle } from "@/lib/auth";
 import { friendlyAuthError } from "@/lib/auth-errors";
+import AuthShell from "@/components/auth/auth-shell";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import PasswordInput from "@/components/ui/password-input";
 import { attemptReferralCapture } from "@/lib/referral-client";
 
@@ -31,11 +34,8 @@ export default function LoginPage() {
     }
   }
 
-  async function enterApp(referralPossible: boolean) {
-    // For an existing account the server refuses with ATTRIBUTION_WINDOW_PASSED
-    // and the stored code is wiped. Cheap, safe, and covers new-Google-user
-    // via login. Skipped when signing out from the dashboard (no ref stored).
-    if (referralPossible) await attemptReferralCapture();
+  async function enterApp() {
+    await attemptReferralCapture();
     router.push("/dashboard");
     router.refresh();
   }
@@ -48,7 +48,7 @@ export default function LoginPage() {
       const user = await signInWithEmail(email, password);
       const idToken = await user.getIdToken();
       await startSession(idToken);
-      await enterApp(true);
+      await enterApp();
     } catch (err) {
       setError(err instanceof Error ? err.message : friendlyAuthError(err));
     } finally {
@@ -63,7 +63,7 @@ export default function LoginPage() {
       const user = await signInWithGoogle();
       const idToken = await user.getIdToken();
       await startSession(idToken);
-      await enterApp(true);
+      await enterApp();
     } catch (err) {
       setError(friendlyAuthError(err));
     } finally {
@@ -72,91 +72,79 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <Link href="/" className="text-lg font-semibold tracking-tight">
-            TradeCraft
-          </Link>
-          <h1 className="mt-4 text-2xl font-bold">Sign in</h1>
-          <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
-            Welcome back.
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium mb-1">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-400 dark:focus:ring-neutral-600"
-              placeholder="you@example.com"
-            />
-          </div>
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label htmlFor="password" className="block text-sm font-medium">
-                Password
-              </label>
-              <Link
-                href="/forgot-password"
-                className="text-xs text-neutral-500 dark:text-neutral-400 hover:underline underline-offset-4"
-              >
-                Forgot password?
-              </Link>
-            </div>
-            <PasswordInput
-              id="password"
-              required
-              value={password}
-              onChange={setPassword}
-              placeholder="Your password"
-              autoComplete="current-password"
-            />
-          </div>
-
-          {error && (
-            <p className="text-sm text-red-600 dark:text-red-400" role="alert">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-md bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 font-medium py-2.5 text-sm hover:opacity-90 disabled:opacity-50"
-          >
-            {loading ? "Signing in..." : "Sign in"}
-          </button>
-        </form>
-
-        <div className="my-5 flex items-center gap-3">
-          <div className="h-px flex-1 bg-neutral-200 dark:bg-neutral-800" />
-          <span className="text-xs text-neutral-500">or</span>
-          <div className="h-px flex-1 bg-neutral-200 dark:bg-neutral-800" />
-        </div>
-
-        <button
-          onClick={handleGoogle}
-          disabled={loading}
-          className="w-full rounded-md border border-neutral-300 dark:border-neutral-700 font-medium py-2.5 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-900 disabled:opacity-50"
-        >
-          Continue with Google
-        </button>
-
-        <p className="mt-6 text-center text-sm text-neutral-500 dark:text-neutral-400">
-          New to TradeCraft?{" "}
-          <Link href="/signup" className="font-medium underline underline-offset-4">
-            Create an account
-          </Link>
+    <AuthShell>
+      <div className="mb-8">
+        <p className="eyebrow">Welcome back</p>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight text-text-primary">Sign in</h1>
+        <p className="mt-1.5 text-sm text-text-muted">
+          Pick up where you left off.
         </p>
       </div>
-    </main>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-text-primary">
+            Email
+          </label>
+          <Input
+            id="email"
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            autoComplete="email"
+          />
+        </div>
+        <div>
+          <div className="mb-1.5 flex items-center justify-between">
+            <label htmlFor="password" className="block text-sm font-medium text-text-primary">
+              Password
+            </label>
+            <Link
+              href="/forgot-password"
+              className="text-xs text-text-muted underline-offset-4 transition-colors hover:text-text-primary hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
+          <PasswordInput
+            id="password"
+            required
+            value={password}
+            onChange={setPassword}
+            placeholder="Your password"
+            autoComplete="current-password"
+          />
+        </div>
+
+        {error && (
+          <p className="text-sm text-danger" role="alert">
+            {error}
+          </p>
+        )}
+
+        <Button type="submit" size="lg" className="w-full" loading={loading}>
+          {loading ? "Signing in..." : "Sign in"}
+        </Button>
+      </form>
+
+      <div className="my-6 flex items-center gap-3">
+        <div className="h-px flex-1 bg-border" />
+        <span className="text-xs text-text-faint">or</span>
+        <div className="h-px flex-1 bg-border" />
+      </div>
+
+      <Button variant="secondary" size="lg" className="w-full" onClick={handleGoogle} disabled={loading}>
+        Continue with Google
+      </Button>
+
+      <p className="mt-8 text-center text-sm text-text-muted">
+        New to TradeCraft?{" "}
+        <Link href="/signup" className="font-medium underline underline-offset-4">
+          Create an account
+        </Link>
+      </p>
+    </AuthShell>
   );
 }

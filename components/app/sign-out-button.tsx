@@ -5,6 +5,7 @@
 
 import { useState } from "react";
 import { signOutUser } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
 import ConfirmDialog from "@/components/ui/confirm-dialog";
 
 export default function SignOutButton() {
@@ -24,12 +25,9 @@ export default function SignOutButton() {
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="w-full rounded-md border border-neutral-300 dark:border-neutral-700 font-medium py-2.5 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-900"
-      >
+      <Button variant="secondary" className="w-full" onClick={() => setOpen(true)}>
         Sign out
-      </button>
+      </Button>
 
       <ConfirmDialog
         open={open}
