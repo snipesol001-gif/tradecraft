@@ -1,14 +1,14 @@
 "use client";
 
-// The consent controls under the policy. The checkbox is required, the
-// button stays until the user chooses, and after agreeing the session is
-// refreshed so the new claim travels in the cookie. Never shown again
-// once accepted (the gate stops redirecting here).
+// The consent controls under the policy. On success the session is
+// refreshed so the new claim travels in the cookie, then the flow moves
+// on. The welcome celebration lives at onboarding completion, not here.
 
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
 import LegalDocumentView from "./legal-document";
 import { PRIVACY, TERMS_VERSION, PRIVACY_VERSION } from "@/lib/legal-content";
 
@@ -39,7 +39,6 @@ export default function PrivacyConsentForm({ nextPath, needsTerms }: PrivacyCons
     try {
       if (needsTerms) await accept("terms", TERMS_VERSION);
       await accept("privacy", PRIVACY_VERSION);
-      // Refresh the session so the fresh claim is inside the cookie.
       try {
         const idToken = await auth.currentUser?.getIdToken(true);
         if (idToken) {
@@ -50,8 +49,7 @@ export default function PrivacyConsentForm({ nextPath, needsTerms }: PrivacyCons
           });
         }
       } catch {
-        // Acceptance is recorded server-side regardless. A fresh sign-in
-        // receives a cookie with the claim either way.
+        // Acceptance is recorded server-side regardless.
       }
       router.push(nextPath);
       router.refresh();
@@ -68,21 +66,21 @@ export default function PrivacyConsentForm({ nextPath, needsTerms }: PrivacyCons
     <div>
       <LegalDocumentView doc={PRIVACY} />
 
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 pb-16 space-y-4">
+      <div className="mx-auto max-w-2xl space-y-4 px-4 pb-16 sm:px-6">
         {needsTerms && (
-          <label className="flex items-start gap-2.5 cursor-pointer">
+          <label className="flex cursor-pointer items-start gap-2.5">
             <input
               type="checkbox"
               checked={termsOk}
               onChange={(e) => setTermsOk(e.target.checked)}
               className="mt-0.5 accent-neutral-900 dark:accent-white"
             />
-            <span className="text-sm text-neutral-600 dark:text-neutral-400">
+            <span className="text-sm text-text-muted">
               I agree to the{" "}
               <Link
                 href="/terms"
                 target="_blank"
-                className="underline underline-offset-4 font-medium"
+                className="font-medium underline underline-offset-4"
               >
                 Terms of Service
               </Link>
@@ -91,31 +89,27 @@ export default function PrivacyConsentForm({ nextPath, needsTerms }: PrivacyCons
           </label>
         )}
 
-        <label className="flex items-start gap-2.5 cursor-pointer">
+        <label className="flex cursor-pointer items-start gap-2.5">
           <input
             type="checkbox"
             checked={privacyOk}
             onChange={(e) => setPrivacyOk(e.target.checked)}
             className="mt-0.5 accent-neutral-900 dark:accent-white"
           />
-          <span className="text-sm text-neutral-600 dark:text-neutral-400">
+          <span className="text-sm text-text-muted">
             I have read and agree to the Privacy Policy.
           </span>
         </label>
 
         {error && (
-          <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+          <p className="text-sm text-danger" role="alert">
             {error}
           </p>
         )}
 
-        <button
-          onClick={handleAgree}
-          disabled={!ready || busy}
-          className="w-full rounded-md bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 font-semibold py-3 text-sm hover:opacity-90 disabled:opacity-50"
-        >
+        <Button size="lg" className="w-full" disabled={!ready} loading={busy} onClick={handleAgree}>
           {busy ? "Saving..." : "Agree and continue"}
-        </button>
+        </Button>
       </div>
     </div>
   );

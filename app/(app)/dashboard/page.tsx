@@ -1,6 +1,41 @@
+import Link from "next/link";
+import { ArrowUpRight, Bookmark, Radar, UserPlus } from "lucide-react";
 import { getSessionUser } from "@/lib/session";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardBody } from "@/components/ui/card";
 import { CheckCircle2 } from "lucide-react";
 import CreditsCard from "@/components/app/credits-card";
+
+// Quick actions. Unbuilt destinations are labeled honestly with "Soon".
+const actions = [
+  {
+    label: "Find opportunities",
+    hint: "Scouted and scored for your skills",
+    href: "/coming-soon?feature=Scout",
+    icon: Radar,
+    soon: true,
+  },
+  {
+    label: "Your leads",
+    hint: "Track everyone you contact",
+    href: "/coming-soon?feature=Leads",
+    icon: Bookmark,
+    soon: true,
+  },
+  {
+    label: "Invite friends",
+    hint: "Earn credits per referral",
+    href: "/profile",
+    icon: UserPlus,
+    soon: false,
+  },
+];
+
+const roadmap = [
+  "Opportunity scouting from real, curated sources",
+  "Lead pipeline with statuses and notes",
+  "Website analyzer and AI prompt tools",
+];
 
 export default async function DashboardPage() {
   // The layout already performed the authoritative checks. This lighter
@@ -11,27 +46,61 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Welcome</h1>
-          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-            Signed in as {user?.email}
-          </p>
+          <p className="eyebrow">Overview</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-text-primary">Home</h1>
+          <p className="mt-1 text-sm text-text-muted">Signed in as {user?.email}</p>
         </div>
-        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-400">
-          <CheckCircle2 size={14} />
-          Email verified
-        </span>
+        {user?.emailVerified && (
+          <Badge variant="success">
+            <CheckCircle2 size={12} />
+            Verified
+          </Badge>
+        )}
       </div>
 
       <CreditsCard />
 
-      <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-6">
-        <h2 className="font-semibold">Your account is live</h2>
-        <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-          Sign-in method: {user?.provider}. Scouting, leads, and the tools
-          arrive step by step. Credits refill daily and will power those
-          features.
-        </p>
-      </div>
+      <section>
+        <p className="eyebrow mb-3">Quick actions</p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {actions.map((a) => (
+            <Link key={a.label} href={a.href} className="group">
+              <Card variant="interactive" className="h-full p-4">
+                <div className="flex items-start justify-between">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-sunken text-text-primary">
+                    <a.icon size={17} />
+                  </span>
+                  <ArrowUpRight
+                    size={15}
+                    className="text-text-faint transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-text-primary"
+                  />
+                </div>
+                <p className="mt-3 text-sm font-semibold text-text-primary">{a.label}</p>
+                <p className="mt-0.5 text-xs text-text-muted">{a.hint}</p>
+                {a.soon && (
+                  <span className="mt-2 inline-block rounded-full border border-border bg-sunken px-2 py-0.5 text-[10px] font-medium text-text-faint">
+                    Soon
+                  </span>
+                )}
+              </Card>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <p className="eyebrow mb-3">Coming to TradeCraft</p>
+        <Card>
+          <CardBody className="space-y-3">
+            {roadmap.map((item) => (
+              <div key={item} className="flex items-center justify-between gap-4">
+                <span className="text-sm text-text-muted">{item}</span>
+                <span className="shrink-0 text-xs text-text-faint">In development</span>
+              </div>
+            ))}
+          </CardBody>
+        </Card>
+      </section>
     </div>
   );
 }

@@ -1,9 +1,11 @@
 "use client";
 
 // The onboarding orchestrator. Loads saved progress, renders the current
-// step, saves each step server-side, and completes onboarding. If the
-// account already completed onboarding but this session predates the
-// claim, it refreshes the session and enters the app.
+// step, saves each step server-side, and completes onboarding. Finishing
+// shows the welcome celebration with the real daily credit amount before
+// entering the dashboard. If the account already completed onboarding but
+// this session predates the claim, it refreshes the session and enters
+// the app directly without a celebration.
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -12,6 +14,7 @@ import type { ExperienceLevel } from "@/lib/onboarding";
 import StepShell from "./step-shell";
 import { StepIdentity, StepTitle, StepLocation } from "./steps-basic";
 import { StepServices, StepExperience, StepLinks, StepReview } from "./steps-pro";
+import WelcomeCelebration from "@/components/celebration/welcome-celebration";
 
 const TOTAL_STEPS = 7;
 
@@ -62,6 +65,8 @@ export default function OnboardingWizard({ email }: { email: string }) {
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [celebrating, setCelebrating] = useState(false);
+  const [dailyCredits, setDailyCredits] = useState<number | null>(null);
 
   const [step, setStep] = useState(1);
   const [existingUsername, setExistingUsername] = useState<string | null>(null);
@@ -87,6 +92,7 @@ export default function OnboardingWizard({ email }: { email: string }) {
         if (!res.ok) {
           if (data.error === "NOT_SIGNED_IN") router.replace("/login");
           else if (data.error === "EMAIL_NOT_VERIFIED") router.replace("/verify-email");
+          else if (data.error === "PRIVACY_REQUIRED") router.replace("/privacy-consent");
           else setError("Could not load your progress. Refresh the page.");
           return;
         }
@@ -179,13 +185,33 @@ export default function OnboardingWizard({ email }: { email: string }) {
         const res = await fetch("/api/onboarding/complete", { method: "POST" });
         const data = await res.json().catch(() => null);
         if (res.ok && (data?.ok || data?.alreadyCompleted)) {
+          // Refresh the session first so the fresh cookie carries the
+          // onboarding claim before we ever navigate to the dashboard.
           try {
             await refreshSession();
           } catch {
-            // Completion already succeeded server-side.
+            // Completion already succeeded server-side. A fresh sign-in
+            // receives a cookie with the claim regardless.
           }
-          router.replace("/dashboard");
-          router.refresh();
+          if (data?.alreadyCompleted) {
+            // Re-entry edge case: no celebration, straight in.
+            router.replace("/dashboard");
+            router.refresh();
+            return;
+          }
+          // First-time finish: read the credit state. This call also
+          // performs the first daily allocation server-side, so the number
+          // shown in the celebration is the real configured allowance.
+          try {
+            const cRes = await fetch("/api/credits/state");
+            const cData = await cRes.json().catch(() => null);
+            if (cRes.ok && cData?.ok && typeof cData.dailyAllowance === "number") {
+              setDailyCredits(cData.dailyAllowance);
+            }
+          } catch {
+            // Non-fatal: celebrate without the credits pill.
+          }
+          setCelebrating(true);
           return;
         }
         if (data?.error === "VALIDATION") {
@@ -203,7 +229,7 @@ export default function OnboardingWizard({ email }: { email: string }) {
   }
 
   if (!loaded) {
-    return <p className="text-sm text-neutral-500">Loading your progress...</p>;
+    return <p className="text-sm text-text-faint">Loading your progress...</p>;
   }
 
   const canContinue =
@@ -296,6 +322,16 @@ export default function OnboardingWizard({ email }: { email: string }) {
           yearsExperience={yearsExperience}
           portfolioUrl={portfolioUrl}
           websiteUrl={websiteUrl}
+        />
+      )}
+
+      {celebrating && (
+        <WelcomeCelebration
+          dailyCredits={dailyCredits}
+          onContinue={() => {
+            router.replace("/dashboard");
+            router.refresh();
+          }}
         />
       )}
     </StepShell>
