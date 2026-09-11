@@ -31,11 +31,11 @@ type ProfileFormProps = {
 };
 
 const inputClass =
-  "w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-400 dark:focus:ring-neutral-600";
+  "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors duration-150 focus:outline-none focus:border-border-strong focus:ring-2 focus:ring-ring/25";
 
 function Row({ label, value, href }: { label: string; value: string; href?: string }) {
   return (
-    <div className="flex justify-between gap-4 py-2.5 border-b border-neutral-100 dark:border-neutral-900 last:border-0">
+    <div className="flex justify-between gap-4 py-2.5 border-b border-border last:border-0">
       <span className="text-sm text-neutral-500 shrink-0">{label}</span>
       {href && value ? (
         <a
@@ -164,7 +164,7 @@ export default function ProfileForm({ initial }: ProfileFormProps) {
     .join(" · ");
 
   return (
-    <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-5 space-y-6">
+    <div className="rounded-xl border border-border bg-surface p-5 shadow-card space-y-6">
       {editing ? (
         <>
           <p className="text-sm font-semibold">Editing profile</p>
@@ -260,19 +260,19 @@ export default function ProfileForm({ initial }: ProfileFormProps) {
             <button
               onClick={handleSave}
               disabled={status === "SAVING"}
-              className="rounded-md bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 font-medium px-5 py-2.5 text-sm hover:opacity-90 disabled:opacity-50"
+              className="rounded-lg bg-primary text-primary-foreground font-medium px-5 py-2.5 text-sm shadow-card transition-all duration-150 hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
             >
               {status === "SAVING" ? "Saving..." : "Save changes"}
             </button>
             <button
               onClick={cancelEditing}
               disabled={status === "SAVING"}
-              className="rounded-md border border-neutral-300 dark:border-neutral-700 font-medium px-5 py-2.5 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-900 disabled:opacity-50"
+              className="rounded-lg border border-border bg-surface font-medium px-5 py-2.5 text-sm text-text-primary transition-colors duration-150 hover:bg-sunken disabled:opacity-50"
             >
               Cancel
             </button>
             {status === "SAVED" && (
-              <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">
+              <span className="text-sm font-medium text-success">
                 Profile saved
               </span>
             )}
@@ -284,7 +284,7 @@ export default function ProfileForm({ initial }: ProfileFormProps) {
             <p className="text-sm font-semibold">Profile details</p>
             <button
               onClick={() => setEditing(true)}
-              className="text-xs font-medium underline underline-offset-4 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
+              className="text-xs font-medium underline underline-offset-4 text-text-muted transition-colors hover:text-text-primary"
             >
               Edit profile
             </button>
@@ -326,7 +326,7 @@ export default function ProfileForm({ initial }: ProfileFormProps) {
           <div>
             <StepServices selected={services} setSelected={setServices} />
             {error && (
-              <p className="mt-3 text-sm text-red-600 dark:text-red-400" role="alert">
+              <p className="mt-3 text-sm text-danger" role="alert">
                 {error}
               </p>
             )}

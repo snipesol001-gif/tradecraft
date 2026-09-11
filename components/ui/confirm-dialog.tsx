@@ -1,9 +1,12 @@
 "use client";
 
-// Reusable confirmation dialog. Centered, elevated, with entrance
-// animation. Deliberately sticky: closes only on explicit Cancel or
-// confirm. Clicking the overlay or pressing Escape does nothing, by
-// design, so the choice is always explicit.
+// Reusable confirmation dialog. Centered with flexbox, where percentage
+// widths have a definite base. One critical stacking rule: the overlay is
+// position:fixed, so the Content must itself be positioned (relative) to
+// paint above it. When the Content was static, the fixed overlay painted
+// on top of the dialog, tinting it black and swallowing every click.
+// z-10 makes the layering explicit. Sticky by design: Escape and outside
+// clicks are ignored, only Cancel or confirm closes the dialog.
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
@@ -34,10 +37,10 @@ export default function ConfirmDialog({
   return (
     <Dialog.Root open={open}>
       <Dialog.Portal>
-        <div className="fixed inset-0 z-50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <Dialog.Overlay className="fixed inset-0 bg-black/60 animate-[overlay-in_180ms_ease-out]" />
           <Dialog.Content
-            className="fixed left-1/2 top-1/2 w-[calc(100%-2.5rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 animate-[dialog-in_200ms_ease-out] rounded-2xl border border-border bg-surface-raised p-6 shadow-raised focus:outline-none"
+            className="relative z-10 w-full max-w-md animate-[dialog-pop_200ms_ease-out] rounded-2xl border border-border bg-surface-raised p-6 shadow-raised focus:outline-none sm:max-w-lg"
             onEscapeKeyDown={(e) => e.preventDefault()}
             onInteractOutside={(e) => e.preventDefault()}
           >
@@ -49,11 +52,11 @@ export default function ConfirmDialog({
                 {description}
               </Dialog.Description>
             )}
-            <div className="mt-6 flex gap-3">
+            <div className="mt-6 flex flex-col-reverse gap-2.5 sm:flex-row sm:gap-3">
               <Button variant="secondary" className="flex-1" onClick={onCancel} disabled={busy}>
                 {cancelLabel}
               </Button>
-                            <Button className="flex-1" onClick={onConfirm} loading={busy}>
+              <Button className="flex-1" onClick={onConfirm} loading={busy}>
                 {busy ? busyLabel ?? confirmLabel : confirmLabel}
               </Button>
             </div>

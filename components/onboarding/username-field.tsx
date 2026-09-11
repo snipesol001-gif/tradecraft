@@ -86,17 +86,17 @@ export default function UsernameField({ value, onChange, onValidityChange }: Use
           value={value}
           onChange={(e) => onChange(e.target.value.toLowerCase())}
           placeholder="yourname"
-          className="w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-400 dark:focus:ring-neutral-600"
+          className="w-full rounded-lg border border-border bg-surface pl-8 pr-3 py-2 text-sm text-text-primary placeholder:text-text-faint transition-colors duration-150 focus:outline-none focus:border-border-strong focus:ring-2 focus:ring-ring/25"
         />
       </div>
       {message && (
         <p
           className={
             available
-              ? "mt-1 text-sm text-emerald-600 dark:text-emerald-400"
+              ? "mt-1 text-sm text-success"
               : checking
                 ? "mt-1 text-sm text-neutral-500 dark:text-neutral-400"
-                : "mt-1 text-sm text-red-600 dark:text-red-400"
+                : "mt-1 text-sm text-danger"
           }
           role="status"
         >

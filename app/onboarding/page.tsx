@@ -16,8 +16,8 @@ export default async function OnboardingPage() {
 
   return (
     <main className="min-h-screen flex flex-col">
-      <header className="h-16 flex items-center px-4 sm:px-6 border-b border-neutral-200 dark:border-neutral-800">
-        <Link href="/" className="text-lg font-semibold tracking-tight">
+      <header className="h-16 flex items-center px-4 sm:px-6 border-b border-border">
+        <Link href="/" className="text-lg font-semibold tracking-tight text-text-primary">
           TradeCraft
         </Link>
       </header>

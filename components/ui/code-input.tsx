@@ -84,7 +84,7 @@ export default function CodeInput({ value, onChange, onComplete, disabled }: Cod
           onKeyDown={(e) => handleKeyDown(i, e)}
           onFocus={(e) => e.target.select()}
           aria-label={`Code digit ${i + 1}`}
-          className="h-12 w-11 rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent text-center text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-neutral-400 dark:focus:ring-neutral-600 disabled:opacity-50"
+          className="h-12 w-11 rounded-lg border border-border bg-surface text-center text-lg font-semibold text-text-primary transition-colors duration-150 focus:outline-none focus:border-border-strong focus:ring-2 focus:ring-ring/25 disabled:opacity-50"
         />
       ))}
     </div>

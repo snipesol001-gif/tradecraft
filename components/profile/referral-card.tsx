@@ -49,7 +49,7 @@ export default function ReferralCard({ code, count }: ReferralCardProps) {
         {code}
       </p>
 
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+      <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
         <Button variant="secondary" className="flex-1" onClick={() => copy("code")}>
           {copied === "code" ? <Check size={15} /> : <Copy size={15} />}
           {copied === "code" ? "Copied" : "Copy code"}
