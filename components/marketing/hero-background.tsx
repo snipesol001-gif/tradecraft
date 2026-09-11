@@ -1,14 +1,5 @@
 "use client";
 
-// The landing page atmosphere. Three layers, all monochrome, zero
-// packages:
-//   1. Canvas dust: soft particles drifting upward with sway and twinkle.
-//   2. Cursor spotlight: a soft light following the pointer with lag.
-//   3. CSS orbs: blurred light fields on slow drift loops, over grain
-//      and a vignette.
-// Reduced motion: particles are drawn once as a static composition, the
-// spotlight and drift are disabled via the global CSS rule and guards.
-
 import { useEffect, useRef } from "react";
 
 type Particle = {
@@ -43,11 +34,11 @@ export default function HeroBackground() {
     let raf = 0;
     let running = true;
 
-    function particleColor(alpha: number): string {
+    const particleColor = (alpha: number): string => {
       return dark ? `rgba(255, 255, 255, ${alpha})` : `rgba(24, 24, 27, ${alpha})`;
-    }
+    };
 
-    function seed() {
+    const seed = () => {
       const density = Math.round((width * height) / 26000);
       const count = Math.max(24, Math.min(60, density));
       particles = Array.from({ length: count }, () => ({
@@ -62,9 +53,9 @@ export default function HeroBackground() {
         twinkleSpeed: 0.4 + Math.random() * 1.2,
         twinklePhase: Math.random() * Math.PI * 2,
       }));
-    }
+    };
 
-    function resize() {
+    const resize = () => {
       const parent = canvas.parentElement;
       if (!parent) return;
       const rect = parent.getBoundingClientRect();
@@ -78,9 +69,9 @@ export default function HeroBackground() {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       seed();
       if (reduced) drawStatic();
-    }
+    };
 
-    function drawFrame(time: number) {
+    const drawFrame = (time: number) => {
       ctx.clearRect(0, 0, width, height);
       const t = time / 1000;
       for (const p of particles) {
@@ -96,9 +87,9 @@ export default function HeroBackground() {
         ctx.fillStyle = particleColor(p.baseAlpha * twinkle);
         ctx.fill();
       }
-    }
+    };
 
-    function drawStatic() {
+    const drawStatic = () => {
       ctx.clearRect(0, 0, width, height);
       for (const p of particles) {
         ctx.beginPath();
@@ -106,15 +97,14 @@ export default function HeroBackground() {
         ctx.fillStyle = particleColor(p.baseAlpha * 0.7);
         ctx.fill();
       }
-    }
+    };
 
-    function loop(time: number) {
+    const loop = (time: number) => {
       if (!running) return;
       drawFrame(time);
       raf = requestAnimationFrame(loop);
-    }
+    };
 
-    // Theme changes recolor the particles live.
     const themeObserver = new MutationObserver(() => {
       dark = document.documentElement.classList.contains("dark");
       if (reduced) drawStatic();
@@ -124,7 +114,6 @@ export default function HeroBackground() {
       attributeFilter: ["class"],
     });
 
-    // Cursor spotlight with smooth lag.
     let lastX = -1;
     let lastY = -1;
     let cx = 0.5;
@@ -132,12 +121,12 @@ export default function HeroBackground() {
     let visible = 0;
     let targetVisible = 0;
 
-    function onPointerMove(e: PointerEvent) {
+    const onPointerMove = (e: PointerEvent) => {
       lastX = e.clientX;
       lastY = e.clientY;
-    }
+    };
 
-    function spotLoop() {
+    const spotLoop = () => {
       if (!running) return;
       const parent = canvas.parentElement;
       if (parent && lastX >= 0) {
@@ -165,7 +154,7 @@ export default function HeroBackground() {
         }
       }
       raf = requestAnimationFrame(spotLoop);
-    }
+    };
 
     resize();
     window.addEventListener("resize", resize);
@@ -189,10 +178,8 @@ export default function HeroBackground() {
 
   return (
     <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
-      {/* Layer 1: canvas dust */}
       <canvas ref={canvasRef} className="absolute inset-0" />
 
-      {/* Layer 2: cursor spotlight, one per theme so the color matches */}
       <div
         ref={spotDarkRef}
         className="absolute inset-0 hidden opacity-0 dark:block"
@@ -210,12 +197,10 @@ export default function HeroBackground() {
         }}
       />
 
-      {/* Layer 3: drifting light fields */}
       <div className="absolute -top-1/3 left-1/4 h-[36rem] w-[36rem] rounded-full bg-text-primary/[0.08] blur-3xl animate-[drift-a_38s_ease-in-out_infinite_alternate]" />
       <div className="absolute top-1/4 -right-1/4 h-[30rem] w-[30rem] rounded-full bg-text-primary/[0.07] blur-3xl animate-[drift-b_46s_ease-in-out_infinite_alternate]" />
       <div className="absolute -bottom-1/4 left-1/2 h-[26rem] w-[40rem] -translate-x-1/2 rounded-full bg-text-primary/[0.05] blur-3xl animate-[drift-c_42s_ease-in-out_infinite_alternate]" />
 
-      {/* Static fine grain */}
       <svg className="absolute inset-0 h-full w-full opacity-[0.035] mix-blend-overlay">
         <filter id="tc-grain">
           <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch" />
@@ -223,7 +208,6 @@ export default function HeroBackground() {
         <rect width="100%" height="100%" filter="url(#tc-grain)" />
       </svg>
 
-      {/* Vignette */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_45%,var(--background)_100%)]" />
     </div>
   );
