@@ -9,7 +9,6 @@ import {
   Send,
   Trophy,
 } from "lucide-react";
-import HeroBackground from "@/components/marketing/hero-background";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 // Honest capability list. Each item is a real part of TradeCraft, built
@@ -59,7 +58,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="relative z-10 border-b border-border/60">
+      <header className="relative z-10">
         <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2.5">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-text-primary text-sm font-bold text-background">
@@ -86,8 +85,7 @@ export default function Home() {
       </header>
 
       {/* Hero */}
-      <section className="relative overflow-hidden">
-        <HeroBackground />
+      <section className="relative">
         <div className="relative mx-auto max-w-6xl px-4 pb-24 pt-24 text-center sm:px-6 sm:pt-32">
           <p className="eyebrow animate-[rise-in_500ms_ease-out]">For independent professionals</p>
           <h1 className="mx-auto mt-4 max-w-3xl animate-[rise-in_500ms_ease-out_80ms_both] text-4xl font-bold leading-[1.08] tracking-tight text-text-primary sm:text-6xl">
@@ -118,7 +116,7 @@ export default function Home() {
 
       {/* Pillars: one primary, two supporting. Deliberate visual weight,
           not three identical cards. */}
-      <section className="border-t border-border/60">
+      <section>
         <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-24">
           <p className="eyebrow">What TradeCraft does</p>
           <h2 className="mt-3 max-w-2xl text-3xl font-bold tracking-tight text-text-primary sm:text-4xl">
@@ -158,7 +156,7 @@ export default function Home() {
       </section>
 
       {/* Workflow strip: a horizontal rhythm change, not another card grid */}
-      <section className="border-t border-border/60">
+      <section>
         <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-24">
           <p className="eyebrow">The workflow</p>
           <h2 className="mt-3 max-w-2xl text-3xl font-bold tracking-tight text-text-primary sm:text-4xl">
@@ -169,8 +167,8 @@ export default function Home() {
             {workflow.map((step, i) => (
               <li key={step.label} className="relative">
                 <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface text-sm font-semibold text-text-primary shadow-card">
-                    {step.icon === null ? i + 1 : <step.icon size={15} />}
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface text-text-primary shadow-card">
+                    <step.icon size={15} />
                   </span>
                   <span className="text-xs font-semibold uppercase tracking-wider text-text-faint">
                     Step {i + 1}
@@ -187,7 +185,7 @@ export default function Home() {
       </section>
 
       {/* Capabilities: quiet list, breaks the card rhythm */}
-      <section className="border-t border-border/60">
+      <section>
         <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-24">
           <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
             <div>
@@ -217,10 +215,9 @@ export default function Home() {
       </section>
 
       {/* Closing CTA band */}
-      <section className="border-t border-border/60">
+      <section>
         <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28">
           <div className="relative overflow-hidden rounded-3xl border border-border bg-surface px-6 py-16 text-center shadow-card">
-            <div className="pointer-events-none absolute -top-24 left-1/2 h-48 w-96 -translate-x-1/2 rounded-full bg-text-primary/5 blur-3xl" />
             <h2 className="relative mx-auto max-w-xl text-3xl font-bold tracking-tight text-text-primary sm:text-4xl">
               Your next client is already looking
             </h2>
@@ -240,7 +237,7 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-border/60">
+      <footer>
         <div className="mx-auto flex h-16 max-w-6xl flex-col items-center justify-between gap-2 px-4 text-sm text-text-faint sm:flex-row sm:px-6">
           <span>
             © {new Date().getFullYear()} {BRAND.name}
