@@ -1,9 +1,10 @@
 import { getSessionUser } from "@/lib/session";
 import { CheckCircle2 } from "lucide-react";
+import CreditsCard from "@/components/app/credits-card";
 
 export default async function DashboardPage() {
-  // The layout already performed the authoritative checks. This lighter call
-  // just reads display information.
+  // The layout already performed the authoritative checks. This lighter
+  // call just reads display information.
   const user = await getSessionUser(false);
 
   return (
@@ -21,12 +22,14 @@ export default async function DashboardPage() {
         </span>
       </div>
 
+      <CreditsCard />
+
       <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-6">
         <h2 className="font-semibold">Your account is live</h2>
         <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-          Sign-in method: {user?.provider}. This is the earliest version of
-          your dashboard. Features arrive step by step: onboarding, opportunity
-          scouting, and more.
+          Sign-in method: {user?.provider}. Scouting, leads, and the tools
+          arrive step by step. Credits refill daily and will power those
+          features.
         </p>
       </div>
     </div>
