@@ -2,14 +2,17 @@
 
 // The frame for all signed-in pages. Desktop: fixed sidebar with active
 // indicators, brand mark, theme toggle, and sign out. Mobile: translucent
-// top bar (the one deliberate glass touch in the system) plus a five-item
-// bottom navigation with an active dot. Unbuilt features lead to the
-// honest coming-soon page.
+// top bar plus a five-item bottom navigation with an active dot. New
+// notifications raise the unread badge and fire a toast (unless the user
+// switched pop-up toasts off), per the product spec.
 
+import { useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Bell, Bookmark, Home, Radar, User } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { useNotifications } from "@/hooks/use-notifications";
+import { useToast } from "@/components/ui/toast";
 import SignOutButton from "./sign-out-button";
 import { cn } from "@/lib/cn";
 
@@ -17,13 +20,13 @@ const navItems = [
   { label: "Home", href: "/dashboard", icon: Home },
   { label: "Scout", href: "/coming-soon?feature=Scout", icon: Radar },
   { label: "Leads", href: "/coming-soon?feature=Leads", icon: Bookmark },
-  { label: "Notifications", href: "/coming-soon?feature=Notifications", icon: Bell },
+  { label: "Notifications", href: "/notifications", icon: Bell },
   { label: "Profile", href: "/profile", icon: User },
 ];
 
-// Items whose href carries a query string (Scout, Leads, Notifications)
-// match the full URL exactly, so only one can ever be active. Items
-// without a query still match their sub-paths (for example /profile).
+// Items whose href carries a query string (Scout, Leads, Notifications
+// previously) match the full URL exactly, so only one can ever be active.
+// Items without a query also match sub-paths (for example /profile).
 function isActive(currentUrl: string, href: string): boolean {
   if (href.includes("?")) {
     return currentUrl === href;
@@ -53,6 +56,30 @@ export default function AppShell({
     ? `${pathname}?${searchParams.toString()}`
     : pathname;
 
+  const { toast } = useToast();
+  const onNew = useCallback(
+    (n: { title: string; body: string; link: string | null }) => {
+      let enabled = true;
+      try {
+        enabled = localStorage.getItem("tc-toasts-enabled") !== "off";
+      } catch {
+        // Storage unavailable: default on.
+      }
+      if (!enabled) return;
+      toast({
+        title: n.title,
+        description: n.body,
+        variant: "info",
+        durationMs: 6000,
+        onClick: () => {
+          window.location.href = n.link ?? "/notifications";
+        },
+      });
+    },
+    [toast]
+  );
+  const { unreadCount } = useNotifications(onNew);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Desktop sidebar */}
@@ -66,7 +93,8 @@ export default function AppShell({
 
         <nav className="flex-1 space-y-1 px-3 py-4">
           {navItems.map((item) => {
-            const active = isActive(currentUrl, item.href);            return (
+            const active = isActive(currentUrl, item.href);
+            return (
               <Link
                 key={item.label}
                 href={item.href}
@@ -82,6 +110,11 @@ export default function AppShell({
                 )}
                 <item.icon size={18} />
                 {item.label}
+                {item.label === "Notifications" && unreadCount > 0 && (
+                  <span className="ml-auto rounded-full bg-text-primary px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-background">
+                    {unreadCount}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -128,7 +161,7 @@ export default function AppShell({
                 key={item.label}
                 href={item.href}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 py-2.5 transition-colors duration-150",
+                  "relative flex flex-col items-center justify-center gap-1 py-2.5 transition-colors duration-150",
                   active ? "text-text-primary" : "text-text-faint hover:text-text-muted"
                 )}
               >
@@ -140,6 +173,11 @@ export default function AppShell({
                     active ? "bg-text-primary opacity-100" : "opacity-0"
                   )}
                 />
+                {item.label === "Notifications" && unreadCount > 0 && (
+                  <span className="absolute right-[18%] top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-text-primary px-1 text-[9px] font-bold text-background">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
               </Link>
             );
           })}

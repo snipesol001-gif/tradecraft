@@ -4,6 +4,7 @@
 // Firestore security rules and server-side code, never in hiding these values.
 
 import { initializeApp, getApps, getApp } from "firebase/app";
+import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -18,3 +19,7 @@ const firebaseConfig = {
 // than once, and calling initializeApp twice throws an error. getApps()
 // returns any existing instance, so we reuse it when present.
 export const firebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
+
+// Client Firestore handle. Security rules limit this to reading the
+// signed-in user's own notifications and flipping the read flag.
+export const firestore = getFirestore(firebaseApp);

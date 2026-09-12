@@ -1,5 +1,5 @@
-// Returns the caller's credit state after applying any due daily reset.
-// serverTime lets the client countdown correct for device clock drift.
+// Returns the caller's credit state (two buckets) after applying any due
+// daily reset. serverTime lets the client countdown correct for drift.
 
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";

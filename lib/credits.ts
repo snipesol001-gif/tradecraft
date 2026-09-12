@@ -1,23 +1,17 @@
-// The credit engine. Balances exist only server-side. Every change goes
-// through grantCredits or spendCredits, which run inside Firestore
-// transactions so simultaneous operations can never corrupt a balance.
-// Every change also appends a ledger entry recording the balance after the
-// change, so any account's history can be reconstructed exactly.
+// The credit engine, two-bucket model (product owner decision):
+//   - creditBalance: EARNED credits (referral rewards, admin grants,
+//     future purchases). NEVER reset or expired. Sit until spent.
+//   - dailyBalance: the daily allowance. Resets to config.dailyFreeCredits
+//     when creditNextResetAt passes (lazy reset: applied on the first
+//     credit operation after the reset time; away three days, return to
+//     exactly one fresh allowance, no rollover).
+// Spending draws from the daily bucket first, keeping earned credits safe.
+// Every change appends a ledger entry. All mutations run in transactions.
 //
-// Daily allowance (lazy reset): the user document stores creditNextResetAt.
-// The first credit operation that notices the timestamp has passed performs
-// the reset inline, capped at one reset per pass: a user away for three
-// days returns to exactly one fresh allowance. No rollover.
-//
-// applyGrantInTx exposes the grant for callers that are already inside
-// their own transaction (the referral resolver), so a status flip and its
-// credit grants commit together atomically. It must only be used inside
-// db.runTransaction.
-//
-// Storage note: balances are flat top-level fields (creditBalance,
-// creditNextResetAt), not a nested map. set() with merge:true replaces a
-// whole nested map, which would let a concurrent grant clobber a
-// concurrent spend. Flat fields merge per field, so concurrency is safe.
+// Migration note: accounts created before the two-bucket model have a
+// single creditBalance (which mixed daily and earned). That value becomes
+// their earned balance on first touch; the daily bucket initializes via
+// the normal lazy reset. Correct going forward.
 
 import { FieldValue, getFirestore, type Transaction, type DocumentReference } from "firebase-admin/firestore";
 import { getAdminApp } from "./firebase-admin";
@@ -41,21 +35,27 @@ export type CreditsConfig = {
   referralProgramActive: boolean;
 };
 
+export type BucketState = {
+  earned: number;
+  daily: number;
+  nextResetAt: number;
+  resetDue: boolean;
+};
+
 export type CreditState = {
-  balance: number;
+  total: number;
+  earned: number;
+  daily: number;
   nextResetAt: number;
   dailyAllowance: number;
 };
 
 export class InsufficientCreditsError extends Error {
-  constructor(public balance: number) {
+  constructor(public total: number) {
     super("INSUFFICIENT_CREDITS");
   }
 }
 
-// Config changes rarely but is read often. Cache it in memory for one
-// minute per server instance to save Firestore reads. Editing the config
-// document takes effect within a minute, no deploy needed.
 const CONFIG_TTL_MS = 60_000;
 let configCache: { value: CreditsConfig; expiresAt: number } | null = null;
 
@@ -94,8 +94,6 @@ export async function getCreditsConfig(): Promise<CreditsConfig> {
   return value;
 }
 
-// The next occurrence of resetHourUtc, strictly after nowMs. Pure UTC math,
-// so there is one global refill moment regardless of local timezones.
 export function computeNextResetAt(resetHourUtc: number, nowMs: number): number {
   const d = new Date(nowMs);
   const todayAtHour = Date.UTC(
@@ -108,6 +106,30 @@ export function computeNextResetAt(resetHourUtc: number, nowMs: number): number 
     0
   );
   return todayAtHour > nowMs ? todayAtHour : todayAtHour + 24 * 60 * 60 * 1000;
+}
+
+// READ ONLY. Computes both buckets from a user doc snapshot, applying the
+// daily reset in memory if due. No writes. Callers write explicitly, which
+// keeps the reads-before-writes transaction rule satisfiable.
+export function computeBuckets(
+  data: Record<string, unknown> | undefined,
+  config: CreditsConfig,
+  nowMs: number
+): BucketState {
+  const earned = typeof data?.creditBalance === "number" ? data.creditBalance : 0;
+  const storedDaily = typeof data?.dailyBalance === "number" ? data.dailyBalance : null;
+  const storedNext = typeof data?.creditNextResetAt === "number" ? data.creditNextResetAt : null;
+  const resetDue =
+    storedDaily === null || storedNext === null || storedNext <= nowMs;
+  return {
+    earned,
+    daily: resetDue ? config.dailyFreeCredits : storedDaily!,
+    nextResetAt:
+      storedNext !== null && !resetDue
+        ? storedNext
+        : computeNextResetAt(config.resetHourUtc, nowMs),
+    resetDue,
+  };
 }
 
 function writeLedgerEntry(
@@ -131,63 +153,27 @@ function writeLedgerEntry(
   });
 }
 
-// Shared transaction body: loads the balance and applies the lazy daily
-// reset if it is due. Returns the up-to-date balance and next reset time.
-async function loadAndReset(
+// Writes both buckets. Callers pass computed states; this performs no
+// reads, so it is safe after all reads inside a transaction.
+export function writeBuckets(
   tx: Transaction,
-  uid: string,
   userRef: DocumentReference,
-  config: CreditsConfig
-): Promise<{ balance: number; nextResetAt: number }> {
-  const snap = await tx.get(userRef);
-  const d = snap.data() ?? {};
-  const now = Date.now();
-  let balance = typeof d.creditBalance === "number" ? d.creditBalance : null;
-  let nextResetAt = typeof d.creditNextResetAt === "number" ? d.creditNextResetAt : null;
-
-  if (balance === null || nextResetAt === null || nextResetAt <= now) {
-    balance = config.dailyFreeCredits;
-    nextResetAt = computeNextResetAt(config.resetHourUtc, now);
-    tx.set(
-      userRef,
-      {
-        creditBalance: balance,
-        creditNextResetAt: nextResetAt,
-        creditLastResetAt: now,
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    );
-    writeLedgerEntry(tx, uid, balance, "daily_allocation", balance);
-  }
-
-  return { balance, nextResetAt };
-}
-
-// Grant inside a caller's transaction. Applies the lazy reset if due,
-// adds the amount, and writes the ledger entry. Returns the balance after.
-export async function applyGrantInTx(
-  tx: Transaction,
   uid: string,
-  amount: number,
-  reason: CreditReason,
-  refId?: string,
-  actorUid?: string
-): Promise<number> {
-  if (!Number.isInteger(amount) || amount <= 0) {
-    throw new Error("applyGrantInTx requires a positive integer amount.");
+  state: BucketState
+) {
+  const update: Record<string, unknown> = {
+    creditBalance: state.earned,
+    dailyBalance: state.daily,
+    creditNextResetAt: state.nextResetAt,
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  if (state.resetDue) {
+    update.creditLastResetAt = Date.now();
   }
-  const config = await getCreditsConfig();
-  const userRef = getFirestore(getAdminApp()).collection("users").doc(uid);
-  const before = await loadAndReset(tx, uid, userRef, config);
-  const balanceAfter = before.balance + amount;
-  tx.set(
-    userRef,
-    { creditBalance: balanceAfter, updatedAt: FieldValue.serverTimestamp() },
-    { merge: true }
-  );
-  writeLedgerEntry(tx, uid, amount, reason, balanceAfter, refId, actorUid);
-  return balanceAfter;
+  tx.set(userRef, update, { merge: true });
+  if (state.resetDue) {
+    writeLedgerEntry(tx, uid, state.daily, "daily_allocation", state.daily);
+  }
 }
 
 export async function getCreditState(uid: string): Promise<CreditState> {
@@ -195,9 +181,14 @@ export async function getCreditState(uid: string): Promise<CreditState> {
   const db = getFirestore(getAdminApp());
   const userRef = db.collection("users").doc(uid);
   return db.runTransaction(async (tx) => {
-    const state = await loadAndReset(tx, uid, userRef, config);
+    const snap = await tx.get(userRef);
+    const now = Date.now();
+    const state = computeBuckets(snap.data(), config, now);
+    writeBuckets(tx, userRef, uid, state);
     return {
-      balance: state.balance,
+      total: state.earned + state.daily,
+      earned: state.earned,
+      daily: state.daily,
       nextResetAt: state.nextResetAt,
       dailyAllowance: config.dailyFreeCredits,
     };
@@ -215,21 +206,33 @@ export async function grantCredits(params: {
   if (!Number.isInteger(amount) || amount <= 0) {
     throw new Error("grantCredits requires a positive integer amount.");
   }
+  if (reason === "daily_allocation") {
+    throw new Error("daily_allocation is produced by the reset, not granted directly.");
+  }
   const config = await getCreditsConfig();
   const db = getFirestore(getAdminApp());
   const userRef = db.collection("users").doc(uid);
   return db.runTransaction(async (tx) => {
-    const before = await loadAndReset(tx, uid, userRef, config);
-    const balanceAfter = before.balance + amount;
+    const snap = await tx.get(userRef);
+    const now = Date.now();
+    const state = computeBuckets(snap.data(), config, now);
+    const earnedAfter = state.earned + amount;
     tx.set(
       userRef,
-      { creditBalance: balanceAfter, updatedAt: FieldValue.serverTimestamp() },
+      {
+        creditBalance: earnedAfter,
+        creditNextResetAt: state.nextResetAt,
+        dailyBalance: state.daily,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
       { merge: true }
     );
-    writeLedgerEntry(tx, uid, amount, reason, balanceAfter, refId, actorUid);
+    writeLedgerEntry(tx, uid, amount, reason, earnedAfter, refId, actorUid);
     return {
-      balance: balanceAfter,
-      nextResetAt: before.nextResetAt,
+      total: earnedAfter + state.daily,
+      earned: earnedAfter,
+      daily: state.daily,
+      nextResetAt: state.nextResetAt,
       dailyAllowance: config.dailyFreeCredits,
     };
   });
@@ -249,20 +252,29 @@ export async function spendCredits(params: {
   const db = getFirestore(getAdminApp());
   const userRef = db.collection("users").doc(uid);
   return db.runTransaction(async (tx) => {
-    const before = await loadAndReset(tx, uid, userRef, config);
-    if (before.balance < amount) {
-      throw new InsufficientCreditsError(before.balance);
+    const snap = await tx.get(userRef);
+    const now = Date.now();
+    const state = computeBuckets(snap.data(), config, now);
+    const total = state.earned + state.daily;
+    if (total < amount) {
+      throw new InsufficientCreditsError(total);
     }
-    const balanceAfter = before.balance - amount;
-    tx.set(
-      userRef,
-      { creditBalance: balanceAfter, updatedAt: FieldValue.serverTimestamp() },
-      { merge: true }
-    );
-    writeLedgerEntry(tx, uid, -amount, reason, balanceAfter, refId);
+    // Spend daily first, keeping earned credits safe.
+    const fromDaily = Math.min(state.daily, amount);
+    const fromEarned = amount - fromDaily;
+    const next: BucketState = {
+      earned: state.earned - fromEarned,
+      daily: state.daily - fromDaily,
+      nextResetAt: state.nextResetAt,
+      resetDue: false,
+    };
+    writeBuckets(tx, userRef, uid, next);
+    writeLedgerEntry(tx, uid, -amount, reason, next.earned + next.daily, refId);
     return {
-      balance: balanceAfter,
-      nextResetAt: before.nextResetAt,
+      total: next.earned + next.daily,
+      earned: next.earned,
+      daily: next.daily,
+      nextResetAt: next.nextResetAt,
       dailyAllowance: config.dailyFreeCredits,
     };
   });
