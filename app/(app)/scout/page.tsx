@@ -1,70 +1,65 @@
 "use client";
 
-// The Scout feed. Ranked opportunities, filtered to the user's services.
-// Services load independently of the feed: a feed failure never fakes an
-// empty services count. A missing index shows its one-click creation
-// button. Saving a lead spends server-defined credits, exactly once.
+// Scout: user-triggered discovery from Scout sources. The user's profile
+// services are the automatic matching context. Source cards render the
+// provider registry's honest states. With every platform provider gated
+// (Reddit pending API approval, X paid API, others unsupported), the
+// truth today is: no selectable platforms yet. That state is displayed
+// plainly, with Job Feeds offered as the working free alternative. The
+// page is complete: platforms light up as providers activate, no rework.
 
 import { useEffect, useState } from "react";
-import { ExternalLink, Bookmark, Radar } from "lucide-react";
+import Link from "next/link";
+import { Clock, Lock, Newspaper, ShieldAlert } from "lucide-react";
 import { useCredits } from "@/hooks/use-credits";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardBody } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useToast } from "@/components/ui/toast";
-import { SERVICES } from "@/lib/services";
 import { cn } from "@/lib/cn";
 
-type FeedItem = {
+type ProviderView = {
   id: string;
-  title: string;
-  summary: string;
-  url: string;
-  sourceName: string;
-  publishedAtMs: number | null;
-  fetchedAtMs: number | null;
-  score: number;
-  matchedServiceIds: string[];
-  reasons: string[];
+  label: string;
+  description: string;
+  status: "active" | "pending_approval" | "unavailable";
+  statusNote: string;
+  pricing: "free" | "per_discovery";
 };
 
-function timeAgo(ms: number | null): string {
-  if (!ms) return "";
-  const s = Math.floor((Date.now() - ms) / 1000);
-  if (s < 60) return "just now";
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return `${d}d ago`;
-}
+// X's honest state: the official API tier that permits search is paid.
+// Declared here because a placeholder provider entry is not warranted
+// until a billing decision exists.
+const X_CARD = {
+  id: "x",
+  label: "X",
+  description: "Public posts where people request freelance help.",
+  status: "unavailable" as const,
+  statusNote:
+    "X's official API tier that allows search is paid. This stays unavailable until that becomes part of the plan.",
+};
 
-function serviceLabel(id: string): string {
-  return SERVICES.find((s) => s.id === id)?.label ?? id;
-}
+const STATUS_META = {
+  active: { label: "Connected", icon: null },
+  pending_approval: { label: "Pending API approval", icon: Clock },
+  unavailable: { label: "Not available", icon: ShieldAlert },
+} as const;
 
 export default function ScoutPage() {
-  const { refresh: refreshCredits } = useCredits();
-  const { toast } = useToast();
-  const [items, setItems] = useState<FeedItem[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [indexUrl, setIndexUrl] = useState<string | null>(null);
-  const [leadSaveCost, setLeadSaveCost] = useState(1);
-  const [myServiceIds, setMyServiceIds] = useState<string[]>([]);
+  const { credits } = useCredits();
+  const [services, setServices] = useState<string[]>([]);
   const [servicesLoaded, setServicesLoaded] = useState(false);
-  const [filter, setFilter] = useState<"mine" | "all">("mine");
-  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
-  const [savingId, setSavingId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [count, setCount] = useState(5);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Services load on their own, so feed failures can never fake "(0)".
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch("/api/onboarding/state");
         const data = await res.json().catch(() => null);
         if (res.ok && data?.ok && Array.isArray(data.data?.services)) {
-          setMyServiceIds(data.data.services);
+          setServices(data.data.services);
         }
       } finally {
         setServicesLoaded(true);
@@ -72,222 +67,211 @@ export default function ScoutPage() {
     })();
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/scout/feed");
-        const data = await res.json().catch(() => null);
-        if (res.ok && data?.ok) {
-          setItems(data.items);
-          setLeadSaveCost(typeof data.leadSaveCost === "number" ? data.leadSaveCost : 1);
-          setError(null);
-          setIndexUrl(null);
-        } else {
-          if (data?.error === "MISSING_INDEX" && typeof data.indexUrl === "string") {
-            setIndexUrl(data.indexUrl);
-            setError("A one-time database index is needed for the feed.");
-          } else if (data?.error === "ONBOARDING_INCOMPLETE") {
-            setError("Finish onboarding to use Scout.");
-          } else {
-            setError("Could not load the feed. Please refresh and try again.");
-          }
-          console.error("[scout] feed error:", res.status, data);
-        }
-      } catch {
-        setError("Could not load the feed. Please refresh and try again.");
-      }
-    })();
-  }, []);
+  const usable = credits?.total ?? 0;
+  const activeProvider = selected === "feeds" ? true : false;
+  const activeLabel = selected === "feeds" ? "Job feeds" : selected === "x" ? X_CARD.label : "";
 
-  const servicesReady = servicesLoaded && myServiceIds.length > 0;
-  const visible = items
-    ? filter === "mine" && servicesReady
-      ? items.filter((i) => i.matchedServiceIds.some((id) => myServiceIds.includes(id)))
-      : items
-    : [];
-
-  async function saveLead(item: FeedItem) {
-    if (savingId) return;
-    setSavingId(item.id);
+  async function startScout() {
+    if (!selected || running) return;
+    setRunning(true);
+    setError(null);
     try {
-      const res = await fetch("/api/leads", {
+      const res = await fetch("/api/scout/runs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ opportunityId: item.id }),
+        body: JSON.stringify({ providerId: selected, count }),
       });
       const data = await res.json().catch(() => null);
+      // The feeds flow continues on the results screen of the Job Feeds
+      // page for now; with a selectable platform provider this becomes
+      // the in-page results area.
       if (res.ok && data?.ok) {
-        setSavedIds((prev) => new Set(prev).add(item.id));
-        if (data.duplicate) {
-          toast({ title: "Already saved", description: "This one is in your leads." });
-          return;
-        }
-        toast({
-          title: "Lead saved",
-          description: `"${item.title.slice(0, 60)}" added to your pipeline. ${leadSaveCost} credit spent.`,
-          variant: "success",
-        });
-        refreshCredits();
+        window.location.href = "/job-feeds";
+        return;
+      }
+      if (data?.error === "PROVIDER_UNAVAILABLE") {
+        setError(data.statusNote ?? "That source is not available for scouting yet.");
       } else if (data?.error === "INSUFFICIENT_CREDITS") {
-        toast({
-          title: "Not enough credits",
-          description: `Saving a lead costs ${leadSaveCost}. Your daily refill is coming.`,
-          variant: "error",
-        });
+        setError(`Not enough credits. Discovery costs ${data.cost ?? 1} per opportunity.`);
       } else {
-        toast({ title: "Could not save", description: "Please try again.", variant: "error" });
+        setError("The scout run could not start. Please try again.");
       }
     } finally {
-      setSavingId(null);
+      setRunning(false);
     }
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="eyebrow">Discover</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-text-primary">Scout</h1>
-          <p className="mt-1 text-sm text-text-muted">
-            Real opportunities from live sources, ranked for your skills.
-            Saving a lead costs {leadSaveCost} credit.
-          </p>
-        </div>
+    <div className="space-y-8">
+      <div>
+        <p className="eyebrow">Discover</p>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight text-text-primary">Scout</h1>
+        <p className="mt-1 max-w-lg text-sm text-text-muted">
+          Scout searches external sources for genuine opportunities matching
+          your services. You decide what to open, save, or act on.
+        </p>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setFilter("mine")}
-          disabled={!servicesReady}
-          className={cn(
-            "rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-40",
-            filter === "mine"
-              ? "border-text-primary bg-text-primary text-background"
-              : "border-border bg-surface text-text-muted hover:border-border-strong"
-          )}
-        >
-          My services ({myServiceIds.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setFilter("all")}
-          className={cn(
-            "rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors",
-            filter === "all"
-              ? "border-text-primary bg-text-primary text-background"
-              : "border-border bg-surface text-text-muted hover:border-border-strong"
-          )}
-        >
-          All opportunities
-        </button>
-      </div>
-
-      {items === null && !error ? (
-        <div className="space-y-3">
-          <Skeleton className="h-28 w-full" />
-          <Skeleton className="h-28 w-full" />
-          <Skeleton className="h-28 w-full" />
-        </div>
-      ) : error ? (
-        <Card className="p-5">
-          <p className="text-sm text-danger">{error}</p>
-          {indexUrl && (
-            <a href={indexUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block">
-              <Button size="sm">Create the index, then refresh this page</Button>
-            </a>
-          )}
-        </Card>
-      ) : visible.length === 0 ? (
-        <Card className="p-8 text-center">
-          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-sunken text-text-muted">
-            <Radar size={20} />
-          </span>
-          <h2 className="mt-4 text-base font-semibold text-text-primary">
-            {filter === "mine"
-              ? "Nothing matching your services yet"
-              : "The feed is empty"}
-          </h2>
-          <p className="mx-auto mt-1 max-w-sm text-sm text-text-muted">
-            {filter === "mine"
-              ? "New items arrive as sources update, usually within hours. Check 'All opportunities' to browse everything."
-              : "Sources refresh on their own schedule. Check back soon."}
+      {/* Your services: read-only, from the profile. One source of truth. */}
+      <section>
+        <div className="flex items-center justify-between">
+          <p className="eyebrow">
+            Your services {servicesLoaded ? `(${services.length})` : ""}
           </p>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {visible.map((item) => {
-            const saved = savedIds.has(item.id);
-            return (
-              <Card key={item.id} className="p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={cn(
-                          "rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums",
-                          item.score >= 50
-                            ? "bg-text-primary text-background"
-                            : item.score > 0
-                              ? "border border-border bg-sunken text-text-muted"
-                              : "border border-border bg-surface text-text-faint"
-                        )}
-                      >
-                        {item.score > 0 ? `${item.score}` : "unranked"}
-                      </span>
-                      <span className="text-xs text-text-faint">
-                        {item.sourceName}
-                        {item.publishedAtMs ? ` · ${timeAgo(item.publishedAtMs)}` : ""}
-                      </span>
-                    </div>
-                    <h2 className="mt-2 text-base font-semibold leading-snug text-text-primary">
-                      {item.title}
-                    </h2>
-                    {item.summary && (
-                      <p className="mt-1 text-sm leading-relaxed text-text-muted">{item.summary}</p>
-                    )}
-                    {item.reasons.length > 0 && (
-                      <p className="mt-2 text-xs text-text-muted">
-                        <span className="font-medium text-text-primary">Why it matched: </span>
-                        {item.reasons.join("; ")}
-                      </p>
-                    )}
-                    {item.matchedServiceIds.length > 0 && (
-                      <div className="mt-2.5 flex flex-wrap gap-1.5">
-                        {item.matchedServiceIds.slice(0, 4).map((id) => (
-                          <span
-                            key={id}
-                            className="rounded-full border border-border bg-sunken px-2 py-0.5 text-[10px] font-medium text-text-muted"
-                          >
-                            {serviceLabel(id)}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <a href={item.url} target="_blank" rel="noopener noreferrer" className="flex-1">
-                    <Button variant="secondary" className="w-full">
-                      <ExternalLink size={15} />
-                      Open original
-                    </Button>
-                  </a>
-                  <Button
-                    className="flex-1"
-                    onClick={() => saveLead(item)}
-                    disabled={saved}
-                    loading={savingId === item.id}
-                  >
-                    <Bookmark size={15} />
-                    {saved ? "Saved" : `Save lead (${leadSaveCost} credit)`}
-                  </Button>
-                </div>
-              </Card>
-            );
-          })}
+          <Link
+            href="/profile"
+            className="text-xs font-medium underline underline-offset-4 text-text-muted transition-colors hover:text-text-primary"
+          >
+            Manage services
+          </Link>
         </div>
-      )}
+        {!servicesLoaded ? (
+          <div className="mt-3 flex gap-2">
+            <Skeleton className="h-7 w-24 rounded-full" />
+            <Skeleton className="h-7 w-28 rounded-full" />
+          </div>
+        ) : services.length === 0 ? (
+          <p className="mt-3 text-sm text-text-muted">
+            No services selected yet. Pick your services on your profile and
+            Scout will use them here automatically.
+          </p>
+        ) : (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {services.map((id) => (
+              <span
+                key={id}
+                className="rounded-full border border-border bg-sunken px-3 py-1 text-xs font-medium text-text-primary"
+              >
+                {id}
+              </span>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Platforms: honest states from the provider registry */}
+      <section>
+        <p className="eyebrow">Where should Scout search?</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {/* X: honest paid-API state */}
+          <Card className="p-4 opacity-80">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-text-primary">{X_CARD.label}</p>
+                <p className="mt-0.5 text-xs text-text-muted">{X_CARD.description}</p>
+              </div>
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-sunken px-2 py-0.5 text-[10px] font-medium text-text-muted">
+                <ShieldAlert size={11} />
+                {STATUS_META.unavailable.label}
+              </span>
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-text-faint">{X_CARD.statusNote}</p>
+          </Card>
+
+          {/* Reddit: honest pending-approval state */}
+          <Card className="p-4 opacity-80">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-text-primary">Reddit</p>
+                <p className="mt-0.5 text-xs text-text-muted">
+                  Public posts from communities where people request freelance help.
+                </p>
+              </div>
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-sunken px-2 py-0.5 text-[10px] font-medium text-text-muted">
+                <Clock size={11} />
+                {STATUS_META.pending_approval.label}
+              </span>
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-text-faint">
+              Reddit requires API approval under its Responsible Builder Policy
+              before Scout can search it. This card updates the moment approval
+              lands.
+            </p>
+          </Card>
+        </div>
+        <p className="mt-3 text-xs leading-relaxed text-text-faint">
+          Platform scouting activates as official API access is approved for
+          each source. Nothing is simulated in the meantime.
+        </p>
+      </section>
+
+      {/* Count + start: enabled only when a platform is selectable */}
+      <section>
+        <p className="eyebrow">Opportunities to find</p>
+        <div className="mt-3 flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCount((c) => Math.max(1, c - 1))}
+              disabled={running}
+              className="h-10 w-10 rounded-lg border border-border bg-surface text-lg font-semibold text-text-primary transition-colors hover:bg-sunken disabled:opacity-40"
+              aria-label="Decrease count"
+            >
+              -
+            </button>
+            <span className="w-12 text-center text-xl font-bold tabular-nums text-text-primary">
+              {count}
+            </span>
+            <button
+              type="button"
+              onClick={() => setCount((c) => Math.min(50, c + 1))}
+              disabled={running}
+              className="h-10 w-10 rounded-lg border border-border bg-surface text-lg font-semibold text-text-primary transition-colors hover:bg-sunken disabled:opacity-40"
+              aria-label="Increase count"
+            >
+              +
+            </button>
+          </div>
+          <p className="text-xs text-text-faint">
+            Available credits: {usable}
+          </p>
+        </div>
+
+        {error && (
+          <p className="mt-4 text-sm text-danger" role="alert">
+            {error}
+          </p>
+        )}
+
+        <Button
+          size="lg"
+          className="mt-5 w-full sm:w-auto"
+          disabled={!activeProvider}
+          loading={running}
+          onClick={startScout}
+        >
+          {running ? "Scouting..." : "Start Scout"}
+        </Button>
+        {!activeProvider && (
+          <p className="mt-3 max-w-lg text-xs leading-relaxed text-text-faint">
+            No platforms are currently selectable: every platform provider is
+            awaiting official API access or a plan decision. Start Scout
+            activates the moment one connects. Job Feeds below already works
+            today, free.
+          </p>
+        )}
+      </section>
+
+      {/* Job Feeds: the working secondary source */}
+      <section>
+        <p className="eyebrow">Also available</p>
+        <Card variant="interactive" className="mt-3 cursor-pointer">
+          <Link href="/job-feeds">
+            <CardBody className="flex items-center gap-4">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-sunken text-text-primary">
+                <Newspaper size={18} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-text-primary">Job Feeds</p>
+                <p className="mt-0.5 text-xs text-text-muted">
+                  Remote job listings from TradeCraft's verified public sources.
+                  Free to browse, free to save.
+                </p>
+              </div>
+            </CardBody>
+          </Link>
+        </Card>
+      </section>
     </div>
   );
 }
