@@ -33,6 +33,10 @@ export type CreditsConfig = {
   referralRewardReferee: number;
   referralMaxRewardsPerDay: number;
   referralProgramActive: boolean;
+  // Deprecated: lead saving becomes free in the Scout realignment. Kept
+  // until the leads route update lands, then removed.
+  leadSaveCost: number;
+  scoutDiscoveryCost: number;
 };
 
 export type BucketState = {
@@ -86,6 +90,14 @@ export async function getCreditsConfig(): Promise<CreditsConfig> {
     referralRewardReferee: requireInt(d.referralRewardReferee, "referralRewardReferee"),
     referralMaxRewardsPerDay: requireInt(d.referralMaxRewardsPerDay, "referralMaxRewardsPerDay"),
     referralProgramActive: d.referralProgramActive === true,
+    // Optional with a safe default, so the existing config document keeps
+    // working before the owner sets this field.
+    leadSaveCost:
+      d.leadSaveCost === undefined ? 1 : requireInt(d.leadSaveCost, "leadSaveCost"),
+    scoutDiscoveryCost:
+      d.scoutDiscoveryCost === undefined
+        ? 1
+        : requireInt(d.scoutDiscoveryCost, "scoutDiscoveryCost"),
   };
   if (value.resetHourUtc > 23) {
     throw new Error('config/credits field "resetHourUtc" must be 0 to 23.');
@@ -132,7 +144,7 @@ export function computeBuckets(
   };
 }
 
-function writeLedgerEntry(
+export function writeLedgerEntry(
   tx: Transaction,
   uid: string,
   delta: number,
