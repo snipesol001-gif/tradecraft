@@ -91,12 +91,27 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: "NOT_SIGNED_IN" }, { status: 401 });
   }
   const db = getFirestore(getAdminApp());
-  const snap = await db
-    .collection("userLeads")
-    .where("uid", "==", sessionUser.uid)
-    .orderBy("createdAt", "desc")
-    .limit(100)
-    .get();
+  let snap;
+  try {
+    snap = await db
+      .collection("userLeads")
+      .where("uid", "==", sessionUser.uid)
+      .orderBy("createdAt", "desc")
+      .limit(100)
+      .get();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[leads] list query failed:", msg);
+    const match = msg.match(/https:\/\/console\.firebase\.google\.com[^\s"']+/);
+    return NextResponse.json(
+      {
+        ok: false,
+        error: match ? "MISSING_INDEX" : "LEADS_QUERY_FAILED",
+        indexUrl: match ? match[0] : null,
+      },
+      { status: 500 }
+    );
+  }
   const leads = snap.docs.map((d) => {
     const v = d.data();
     return {
