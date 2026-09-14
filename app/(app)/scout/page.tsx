@@ -15,7 +15,9 @@ import { useCredits } from "@/hooks/use-credits";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SERVICES } from "@/lib/services";
 import { cn } from "@/lib/cn";
+
 
 type ProviderView = {
   id: string;
@@ -43,6 +45,10 @@ const STATUS_META = {
   pending_approval: { label: "Pending API approval", icon: Clock },
   unavailable: { label: "Not available", icon: ShieldAlert },
 } as const;
+
+function serviceLabel(id: string): string {
+  return SERVICES.find((s) => s.id === id)?.label ?? id;
+}
 
 export default function ScoutPage() {
   const { credits } = useCredits();
@@ -142,7 +148,7 @@ export default function ScoutPage() {
                 key={id}
                 className="rounded-full border border-border bg-sunken px-3 py-1 text-xs font-medium text-text-primary"
               >
-                {id}
+                {serviceLabel(id)}
               </span>
             ))}
           </div>
@@ -191,7 +197,14 @@ export default function ScoutPage() {
         </div>
         <p className="mt-3 text-xs leading-relaxed text-text-faint">
           Platform scouting activates as official API access is approved for
-          each source. Nothing is simulated in the meantime.
+          each source. Nothing is simulated in the meantime.{" "}
+          <Link
+            href="/connect-accounts"
+            className="underline underline-offset-4 hover:text-text-muted"
+          >
+            Connect Accounts
+          </Link>{" "}
+          shows the authorization status of every platform.
         </p>
       </section>
 

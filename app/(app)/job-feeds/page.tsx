@@ -44,7 +44,7 @@ export default function JobFeedsPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/scout/feed");
+        const res = await fetch("/api/job-feeds");
         const data: FeedResponse = await res.json().catch(() => null);
         if (res.ok && data?.ok && Array.isArray(data.items)) {
           setItems(data.items);
