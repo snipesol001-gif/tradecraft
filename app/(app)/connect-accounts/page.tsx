@@ -7,7 +7,6 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
 import { ArrowLeft, Clock, MinusCircle, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody } from "@/components/ui/card";
