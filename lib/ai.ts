@@ -312,3 +312,55 @@ export async function classifyIngestedItem(input: {
   const transient = shouldTryNext(result.error);
   return { ok: false, error: result.error, transient };
 }
+
+// ---------------------------------------------------------------------
+// Task: generateSuggestedReply. Uses the user's own professional profile
+// context. Output is a draft for the user to copy and send manually on
+// the original platform. TradeCraft never sends anything automatically.
+// ---------------------------------------------------------------------
+
+export type SuggestedReply = {
+  message: string;
+};
+
+export async function generateSuggestedReply(input: {
+  displayName: string;
+  professionalTitle: string;
+  relevantServiceLabels: string[];
+  portfolioUrl: string | null;
+  postTitle: string;
+  postBody: string;
+  platformName: string;
+}): Promise<{ ok: true; result: SuggestedReply } | { ok: false; error: string }> {
+  const prompt = `Draft a short professional reply to a public post where someone appears to need freelance help.
+
+ABOUT THE SENDER (use naturally, do not recite):
+Name: ${input.displayName}
+Title: ${input.professionalTitle}
+Services: ${input.relevantServiceLabels.join(", ")}
+ ${input.portfolioUrl ? `Portfolio: ${input.portfolioUrl}` : "Portfolio: not provided, do not mention one"}
+
+THE POST (on ${input.platformName}):
+Title: ${input.postTitle}
+Content: ${input.postBody || "(no content)"}
+
+Rules:
+- Maximum 90 words. Plain, warm, professional. No hype, no exclamation marks.
+- Reference one specific thing from their post to show it was actually read.
+- Offer help with the specific service that matches their need.
+- End with a simple question inviting next steps.
+- Do not invent facts, prices, availability dates, or client names.
+- Output JSON only: { "message": "the reply text" }`;
+
+  const result = await generateJSON(prompt, 400);
+  if (!result.ok) {
+    return { ok: false, error: result.error };
+  }
+
+  const parsed = parseJSONResponse(result.text);
+  const message = typeof parsed?.message === "string" ? parsed.message.trim() : "";
+  if (!message || message.length < 20) {
+    return { ok: false, error: "EMPTY_OR_SHORT_REPLY" };
+  }
+  return { ok: true, result: { message: message.slice(0, 1200) } };
+}
