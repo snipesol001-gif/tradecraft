@@ -65,6 +65,12 @@ export async function GET() {
       score: typeof d.score === "number" ? d.score : 0,
       matchedServiceIds: Array.isArray(d.matchedServiceIds) ? d.matchedServiceIds : [],
       reasons: Array.isArray(d.reasons) ? d.reasons : [],
+      aiScored: d.aiScored === true,
+      aiScore: typeof d.aiScore === "number" ? d.aiScore : undefined,
+      aiConfidence: typeof d.aiConfidence === "string" ? d.aiConfidence : undefined,
+      aiReasons: Array.isArray(d.aiReasons) ? (d.aiReasons as string[]) : undefined,
+      aiEvidence: typeof d.aiEvidence === "string" ? d.aiEvidence : undefined,
+      aiGrounded: typeof d.aiGrounded === "boolean" ? d.aiGrounded : undefined,
     };
   });
 

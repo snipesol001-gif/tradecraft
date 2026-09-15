@@ -1,9 +1,8 @@
 "use client";
 
 // Shared opportunity card for Scout results and Job Feeds browsing.
-// Shows score honestly (unranked items say so), evidence lines, matched
-// services, original link, and free Save Lead. Callers control the save
-// behavior and label.
+// Prefers AI review fields (score, confidence, evidence, grounding) when
+// present, falls back to rule-based reasons, and says which it is doing.
 
 import { ExternalLink, Bookmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -21,6 +20,12 @@ export type OpportunityCardData = {
   score: number;
   matchedServiceIds: string[];
   reasons: string[];
+  aiScored?: boolean;
+  aiScore?: number;
+  aiConfidence?: string;
+  aiReasons?: string[];
+  aiEvidence?: string;
+  aiGrounded?: boolean;
 };
 
 function timeAgo(ms: number | null): string {
@@ -80,12 +85,31 @@ export default function OpportunityCard({
       {item.summary && (
         <p className="mt-1 text-sm leading-relaxed text-text-muted">{item.summary}</p>
       )}
-      {item.reasons.length > 0 && (
+
+      {item.aiScored ? (
+        <div className="mt-2 rounded-lg border border-border bg-sunken px-3 py-2">
+          <p className="text-xs text-text-muted">
+            <span className="font-medium text-text-primary">AI review: </span>
+            {typeof item.aiScore === "number" ? `${item.aiScore}/100` : "scored"} ·{" "}
+            {item.aiConfidence ?? "low"} confidence
+            {item.aiGrounded === false ? " · unverified evidence" : ""}
+          </p>
+          {item.aiEvidence && (
+            <p className="mt-1 text-xs italic leading-relaxed text-text-muted">
+              "{item.aiEvidence}"
+            </p>
+          )}
+          {item.aiReasons && item.aiReasons.length > 0 && (
+            <p className="mt-1 text-xs text-text-muted">{item.aiReasons.join("; ")}</p>
+          )}
+        </div>
+      ) : item.reasons.length > 0 ? (
         <p className="mt-2 text-xs text-text-muted">
           <span className="font-medium text-text-primary">Why it matched: </span>
           {item.reasons.join("; ")}
         </p>
-      )}
+      ) : null}
+
       {item.matchedServiceIds.length > 0 && (
         <div className="mt-2.5 flex flex-wrap gap-1.5">
           {item.matchedServiceIds.slice(0, 4).map((id) => (

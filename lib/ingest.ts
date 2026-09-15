@@ -1,29 +1,30 @@
 // The ingestion worker. Fetches due RSS sources, parses items, dedupes
-// by document ID (sourceId + hash of the link, so duplicates are
-// structurally impossible), scores against the services catalog, stores
-// opportunities, and updates per-source health.
+// by deterministic document ID, scores with rules, optionally classifies
+// with AI (budget-gated per UTC day via config/ai), stores, and updates
+// per-source health.
 //
-// Honesty rules: only https fetches with timeout and size caps; raw feed
-// content is stored as summary text with a link back to the original
-// source (never altered or presented as TradeCraft's own content);
-// failed sources report errors into their health record, they never
-// disappear silently.
-//
-// Trigger model: manual (owner route), scheduled (Vercel cron, daily on
-// the Hobby plan), and lazy (Scout page calls ingestIfDue). Double runs
-// are harmless: every item create is a no-op if the hash already exists.
+// v1.2 fixes, found by owner testing:
+//  - The AI budget is ONE shared pool across all sources. The previous
+//    version gave each parallel source its own counter, so a budget of 1
+//    could spend up to one per source.
+//  - Dedupe now happens BEFORE the AI call. The previous version
+//    classified items and only then discovered they were duplicates,
+//    burning AI quota on items it discarded.
 
 import { createHash } from "crypto";
-import { FieldValue, getFirestore, type WriteBatch } from "firebase-admin/firestore";
+import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { XMLParser } from "fast-xml-parser";
 import { getAdminApp } from "./firebase-admin";
 import { scoreOpportunity } from "./scoring";
+import { classifyIngestedItem, getAIScoringConfig, getModelName } from "./ai";
+import { SERVICES } from "./services";
 import type { SourceCategory } from "./sources";
 
 const FETCH_TIMEOUT_MS = 12_000;
 const MAX_FEED_CHARS = 2_000_000;
 const MAX_SUMMARY_CHARS = 320;
-const USER_AGENT = "TradeCraftBot/1.0 (opportunity ingestion; +https://tradecraft9.vercel.app)";
+const USER_AGENT =
+  "TradeCraftBot/1.0 (opportunity ingestion; +https://tradecraft9.vercel.app)";
 
 export type SourceReport = {
   sourceId: string;
@@ -39,6 +40,7 @@ export type IngestReport = {
   force: boolean;
   sources: SourceReport[];
   totalStored: number;
+  aiClassified: number;
 };
 
 const parser = new XMLParser({
@@ -96,7 +98,10 @@ async function fetchFeed(url: string): Promise<string> {
   try {
     const res = await fetch(url, {
       signal: controller.signal,
-      headers: { "User-Agent": USER_AGENT, Accept: "application/rss+xml, application/xml, text/xml, */*" },
+      headers: {
+        "User-Agent": USER_AGENT,
+        Accept: "application/rss+xml, application/xml, text/xml, */*",
+      },
       redirect: "follow",
     });
     if (!res.ok) {
@@ -123,17 +128,19 @@ function parseFeed(xml: string): NormalizedItem[] {
   const parsed = parser.parse(xml) as Record<string, unknown>;
   const items: Array<Record<string, unknown>> = [];
 
-  // RSS 2.0
   const rss = parsed.rss as Record<string, unknown> | undefined;
   const channel = rss?.channel as Record<string, unknown> | undefined;
   if (channel?.item) {
-    items.push(...asArray(channel.item as Record<string, unknown> | Record<string, unknown>[]));
+    items.push(
+      ...asArray(channel.item as Record<string, unknown> | Record<string, unknown>[])
+    );
   }
 
-  // Atom fallback for future sources.
   const atom = parsed.feed as Record<string, unknown> | undefined;
   if (!channel && atom?.entry) {
-    items.push(...asArray(atom.entry as Record<string, unknown> | Record<string, unknown>[]));
+    items.push(
+      ...asArray(atom.entry as Record<string, unknown> | Record<string, unknown>[])
+    );
   }
 
   const out: NormalizedItem[] = [];
@@ -146,7 +153,9 @@ function parseFeed(xml: string): NormalizedItem[] {
       text(item.url);
     const title = text(item.title);
     if (!rawLink || !title) continue;
-    const summary = stripHtml(text(item.description) || text(item.summary) || text(item.content));
+    const summary = stripHtml(
+      text(item.description) || text(item.summary) || text(item.content)
+    );
     const dateRaw = text(item.pubDate) || text(item.published) || text(item.updated);
     const parsedDate = dateRaw ? new Date(dateRaw) : null;
     out.push({
@@ -159,6 +168,13 @@ function parseFeed(xml: string): NormalizedItem[] {
   return out;
 }
 
+// ONE shared AI budget for the whole run. remaining decrements
+// synchronously before each AI call, so parallel sources cannot
+// collectively overshoot it.
+type AIBudget = {
+  remaining: number;
+};
+
 async function ingestSource(
   source: {
     sourceId: string;
@@ -168,14 +184,16 @@ async function ingestSource(
     category: SourceCategory;
     tier: string;
   },
-  db: ReturnType<typeof getFirestore>
-): Promise<SourceReport> {
-  const report: SourceReport = {
+  db: ReturnType<typeof getFirestore>,
+  ai: AIBudget
+): Promise<SourceReport & { aiUsed: number }> {
+  const report = {
     sourceId: source.sourceId,
-    status: "ok",
+    status: "ok" as const,
     fetched: 0,
     stored: 0,
     duplicates: 0,
+    aiUsed: 0,
   };
 
   try {
@@ -183,46 +201,92 @@ async function ingestSource(
     const items = parseFeed(xml);
     report.fetched = items.length;
 
-    // Parallel creates in small chunks; existing docs count as duplicates.
-    for (let i = 0; i < items.length; i += 8) {
-      const chunk = items.slice(i, i + 8);
-      await Promise.all(
-        chunk.map(async (item) => {
-          const hash = createHash("sha256").update(item.link).digest("hex");
-          const docId = `${source.sourceId}_${hash.slice(0, 40)}`;
-          const score = scoreOpportunity({
-            title: item.title,
-            summary: item.summary,
-            sourceCategory: source.category,
-          });
-          try {
-            await db.collection("opportunities").doc(docId).create({
-              sourceId: source.sourceId,
-              sourceName: source.name,
-              sourceCategory: source.category,
-              tier: source.tier,
-              siteUrl: source.siteUrl,
-              title: item.title,
-              summary: item.summary,
-              url: item.link,
-              publishedAt: item.publishedAt ?? null,
-              fetchedAt: FieldValue.serverTimestamp(),
-              score: score.score,
-              matchedServiceIds: score.matchedServiceIds,
-              reasons: score.reasons,
-              status: "active",
-            });
-            report.stored += 1;
-          } catch (err) {
-            const code = (err as { code?: string }).code;
-            if (code === "6" || code === "already-exists") {
-              report.duplicates += 1;
-            } else {
-              throw err;
-            }
-          }
-        })
-      );
+    for (const item of items) {
+      const hash = createHash("sha256").update(item.link).digest("hex");
+      const docId = `${source.sourceId}_${hash.slice(0, 40)}`;
+      const docRef = db.collection("opportunities").doc(docId);
+
+      // Dedupe BEFORE the AI call: an existing item must never consume
+      // AI quota.
+      const existing = await docRef.get();
+      if (existing.exists) {
+        report.duplicates += 1;
+        continue;
+      }
+
+      const score = scoreOpportunity({
+        title: item.title,
+        summary: item.summary,
+        sourceCategory: source.category,
+      });
+
+      // Optional AI classification from the shared budget. Check and
+      // decrement synchronously, then await the call: no race can spend
+      // the same unit twice.
+      let aiFields: Record<string, unknown> = { aiScored: false };
+      if (ai.remaining > 0) {
+        ai.remaining -= 1;
+        report.aiUsed += 1;
+
+        const labels = score.matchedServiceIds.length
+          ? score.matchedServiceIds
+              .map((id) => SERVICES.find((s) => s.id === id))
+              .filter((s): s is (typeof SERVICES)[number] => Boolean(s))
+              .map((s) => ({ id: s.id, label: s.label }))
+          : SERVICES.slice(0, 10).map((s) => ({ id: s.id, label: s.label }));
+
+        const aiResult = await classifyIngestedItem({
+          title: item.title,
+          summary: item.summary,
+          serviceOptions: labels,
+        });
+        if (aiResult.ok) {
+          aiFields = {
+            aiScored: true,
+            aiScore: aiResult.result.score,
+            aiConfidence: aiResult.result.confidence,
+            aiReasons: aiResult.result.reasons,
+            aiEvidence: aiResult.result.evidenceQuote,
+            aiGrounded: aiResult.result.grounded,
+            aiIsGenuine: aiResult.result.isGenuineOpportunity,
+            aiMatchedServiceIds: aiResult.result.matchedServiceIds,
+            aiScoredAt: new Date().toISOString(),
+            aiModel: getModelName(),
+          };
+        } else if (aiResult.transient) {
+          aiFields = { aiScored: false, aiPending: true };
+        } else {
+          aiFields = { aiScored: false };
+        }
+      }
+
+      try {
+        await docRef.create({
+          sourceId: source.sourceId,
+          sourceName: source.name,
+          sourceCategory: source.category,
+          tier: source.tier,
+          siteUrl: source.siteUrl,
+          title: item.title,
+          summary: item.summary,
+          url: item.link,
+          publishedAt: item.publishedAt ?? null,
+          fetchedAt: FieldValue.serverTimestamp(),
+          score: score.score,
+          matchedServiceIds: score.matchedServiceIds,
+          reasons: score.reasons,
+          status: "active",
+          ...aiFields,
+        });
+        report.stored += 1;
+      } catch (err) {
+        const code = (err as { code?: string }).code;
+        if (code === "6" || code === "already-exists") {
+          report.duplicates += 1;
+        } else {
+          throw err;
+        }
+      }
     }
   } catch (err) {
     report.status = "error";
@@ -235,20 +299,20 @@ async function ingestSource(
 async function updateSourceHealth(
   sourceId: string,
   report: SourceReport,
-  db: ReturnType<typeof getFirestore>,
-  batch?: WriteBatch
+  db: ReturnType<typeof getFirestore>
 ) {
   const ref = db.collection("sources").doc(sourceId);
-  const health = {
-    lastFetchedAt: FieldValue.serverTimestamp(),
-    lastStatus: report.status === "ok" ? "ok" : `error: ${report.error ?? "unknown"}`,
-    consecutiveFailures: report.status === "ok" ? 0 : FieldValue.increment(1),
-  };
-  if (batch) {
-    batch.set(ref, { health, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-  } else {
-    await ref.set({ health, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-  }
+  await ref.set(
+    {
+      health: {
+        lastFetchedAt: FieldValue.serverTimestamp(),
+        lastStatus: report.status === "ok" ? "ok" : `error: ${report.error ?? "unknown"}`,
+        consecutiveFailures: report.status === "ok" ? 0 : FieldValue.increment(1),
+      },
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
 }
 
 export async function runIngestion(options: { force?: boolean } = {}): Promise<IngestReport> {
@@ -256,8 +320,26 @@ export async function runIngestion(options: { force?: boolean } = {}): Promise<I
   const startedAt = new Date().toISOString();
   const snap = await db.collection("sources").where("active", "==", true).get();
 
-  const report: IngestReport = { startedAt, force: options.force === true, sources: [], totalStored: 0 };
+  const report: IngestReport = {
+    startedAt,
+    force: options.force === true,
+    sources: [],
+    totalStored: 0,
+    aiClassified: 0,
+  };
   const now = Date.now();
+
+  // One shared AI budget for the entire run.
+  const aiCfg = await getAIScoringConfig().catch(() => ({
+    scoringEnabled: false,
+    dailyItemBudget: 0,
+    usedToday: 0,
+  }));
+  const ai: AIBudget = {
+    remaining: aiCfg.scoringEnabled
+      ? Math.max(0, aiCfg.dailyItemBudget - aiCfg.usedToday)
+      : 0,
+  };
 
   const due: Array<{ source: Record<string, unknown>; id: string }> = [];
   for (const doc of snap.docs) {
@@ -289,7 +371,8 @@ export async function runIngestion(options: { force?: boolean } = {}): Promise<I
           category: (source.category ?? "mixed") as SourceCategory,
           tier: String(source.tier ?? "free"),
         },
-        db
+        db,
+        ai
       );
       await updateSourceHealth(id, r, db);
       return r;
@@ -298,6 +381,7 @@ export async function runIngestion(options: { force?: boolean } = {}): Promise<I
 
   report.sources.push(...results);
   report.totalStored = results.reduce((sum, r) => sum + r.stored, 0);
+  report.aiClassified = results.reduce((sum, r) => sum + r.aiUsed, 0);
 
   await db.collection("system").doc("ingestState").set(
     { lastFullIngestAt: FieldValue.serverTimestamp() },
@@ -307,11 +391,9 @@ export async function runIngestion(options: { force?: boolean } = {}): Promise<I
   return report;
 }
 
-// Lazy trigger for the Scout page: ingest only if the last full run is
+// Lazy trigger for caller pages: ingest only if the last full run is
 // older than minGapMs. Returns null when nothing was due.
-export async function ingestIfDue(
-  minGapMs = 3 * 3600_000
-): Promise<IngestReport | null> {
+export async function ingestIfDue(minGapMs = 3 * 3600_000): Promise<IngestReport | null> {
   const db = getFirestore(getAdminApp());
   const snap = await db.collection("system").doc("ingestState").get();
   const last = snap.data()?.lastFullIngestAt;

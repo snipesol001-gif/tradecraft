@@ -2,21 +2,17 @@
 //
 // Design rules (blueprint section 60):
 //  - The API key exists only server-side. Never NEXT_PUBLIC_.
-//  - Tasks are declared once with their prompt and limits; callers never
-//    talk to the raw API.
-//  - Every call is logged to the aiUsage collection with real usage
-//    metadata, so AI cost is always observable, never guessed.
+//  - Tasks are declared once; callers never talk to the raw API.
+//  - Every call is logged to aiUsage with usageDate and token counts, so
+//    AI cost is always observable and budgetable, never guessed.
 //  - Degraded honesty: with no key configured, isAIConfigured() returns
 //    false and callers fall back to rule-based scoring with an honest
 //    "AI scoring is off" state. Nothing pretends.
 //
-// Model resilience: a fallback CHAIN, not a single name. Google's catalog
-// churns (models get deprecated while still being listed), and free-tier
-// capacity fluctuates. The chain tries the configured model first, then
-// the configured fallback, then the code default. Model-specific failures
-// (deprecated, not found) and transient capacity failures both fall
-// through to the next candidate. Only auth failures stop the chain: a
-// rejected key fails on every model equally.
+// Model resilience: a fallback CHAIN, not a single name. The chain tries
+// the configured model, then the configured fallback, then the code
+// default. Model-specific failures (deprecated, not found) and transient
+// capacity failures both fall through. Only auth failures stop the chain.
 
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getAdminApp } from "./firebase-admin";
@@ -33,8 +29,6 @@ export function getModelName(): string {
   return process.env.GEMINI_MODEL || DEFAULT_MODEL;
 }
 
-// The fallback chain, fully env-driven so reordering never needs a code
-// change. Duplicates are removed while preserving order.
 function getModelChain(): string[] {
   const configured = process.env.GEMINI_MODEL;
   const fallback = process.env.GEMINI_MODEL_FALLBACK;
@@ -44,11 +38,6 @@ function getModelChain(): string[] {
   return chain.length > 0 ? chain : [DEFAULT_MODEL];
 }
 
-// Decides whether the next model in the chain should be tried. Two
-// classes qualify: transient capacity problems (busy, overloaded), and
-// model-specific problems (deprecated, not found), because a bad model
-// name says nothing about the next candidate. Only auth failures stop
-// the chain: a rejected key fails on every model equally.
 function shouldTryNext(message: string, status?: number): boolean {
   const m = message.toLowerCase();
   if (
@@ -72,9 +61,6 @@ export type AIResult =
   | { ok: true; text: string; model: string; totalTokenCount: number | null; durationMs: number }
   | { ok: false; error: string; status?: number; model: string };
 
-// One structured JSON completion, attempted across the model chain. This
-// function is transport, timeout, fallback, parsing, and logging. Callers
-// never talk to the raw API.
 export async function generateJSON(prompt: string, maxOutputTokens = 512): Promise<AIResult> {
   const key = process.env.GOOGLE_AI_API_KEY;
   if (!key) {
@@ -82,7 +68,7 @@ export async function generateJSON(prompt: string, maxOutputTokens = 512): Promi
   }
 
   const chain = getModelChain();
-  let lastError: string = "unknown";
+  let lastError = "unknown";
   let lastStatus: number | undefined;
 
   for (const model of chain) {
@@ -149,16 +135,9 @@ export async function generateJSON(prompt: string, maxOutputTokens = 512): Promi
     }
   }
 
-  return {
-    ok: false,
-    error: lastError,
-    status: lastStatus,
-    model: chain.join(" -> "),
-  };
+  return { ok: false, error: lastError, status: lastStatus, model: chain.join(" -> ") };
 }
 
-// Parse a JSON AI response defensively. Returns null when the model
-// produced something unparseable, and callers degrade honestly.
 export function parseJSONResponse(text: string): Record<string, unknown> | null {
   try {
     const parsed = JSON.parse(text);
@@ -171,8 +150,6 @@ export function parseJSONResponse(text: string): Record<string, unknown> | null 
   }
 }
 
-// Usage logging. Cost estimation stays out of v1 (per-model pricing
-// changes too fast to hardcode); token counts are the durable record.
 async function logUsage(entry: {
   task: string;
   model: string;
@@ -190,20 +167,14 @@ async function logUsage(entry: {
       durationMs: entry.durationMs,
       totalTokenCount: entry.totalTokenCount ?? null,
       detail: entry.detail ?? null,
+      // usageDate powers the daily budget counter. UTC day string.
+      usageDate: new Date().toISOString().slice(0, 10),
       createdAt: FieldValue.serverTimestamp(),
     });
   } catch {
     // Logging must never break the caller.
   }
 }
-
-// ---------------------------------------------------------------------
-// Task: classifyOpportunity. Separates observation from inference: the
-// model answers only from the provided text, marks genuine hiring intent
-// explicitly, and must quote the exact evidence it relied on. When the
-// quote cannot be found in the source text, confidence drops, because
-// ungrounded evidence is a hallucination signal.
-// ---------------------------------------------------------------------
 
 export type OpportunityClassification = {
   isGenuineOpportunity: boolean;
@@ -294,4 +265,50 @@ Respond with JSON only, in exactly this shape:
       grounded,
     },
   };
+}
+
+// ---------------------------------------------------------------------
+// Ingestion-time scoring. Budgeted per UTC day via config/ai so the free
+// tier is protected. Transient AI failures mark the item aiPending so a
+// later run can retry; permanent failures do not retry.
+// ---------------------------------------------------------------------
+
+export async function getAIScoringConfig(): Promise<{
+  scoringEnabled: boolean;
+  dailyItemBudget: number;
+  usedToday: number;
+}> {
+  const db = getFirestore(getAdminApp());
+  const aiSnap = await db.collection("config").doc("ai").get();
+  const today = new Date().toISOString().slice(0, 10);
+  const scoringEnabled = aiSnap.data()?.scoringEnabled === true;
+  const dailyItemBudget =
+    typeof aiSnap.data()?.dailyItemBudget === "number" ? aiSnap.data()!.dailyItemBudget : 30;
+  const usageSnap = await db
+    .collection("aiUsage")
+    .where("task", "==", "classify_item")
+    .where("usageDate", "==", today)
+    .count()
+    .get();
+  return {
+    scoringEnabled,
+    dailyItemBudget,
+    usedToday: usageSnap.data().count,
+  };
+}
+
+export async function classifyIngestedItem(input: {
+  title: string;
+  summary: string;
+  serviceOptions: Array<{ id: string; label: string }>;
+}): Promise<
+  | { ok: true; result: OpportunityClassification }
+  | { ok: false; error: string; transient: boolean }
+> {
+  const result = await classifyOpportunity(input);
+  if (result.ok) {
+    return result;
+  }
+  const transient = shouldTryNext(result.error);
+  return { ok: false, error: result.error, transient };
 }
