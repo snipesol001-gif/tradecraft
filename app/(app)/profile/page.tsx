@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getFirestore } from "firebase-admin/firestore";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Crown } from "lucide-react";
 import { getSessionUser } from "@/lib/session";
 import { getAdminApp } from "@/lib/firebase-admin";
 import { ensureReferralCode } from "@/lib/referral";
@@ -55,6 +55,12 @@ export default async function ProfilePage() {
               <Badge variant="success">
                 <CheckCircle2 size={12} />
                 Verified
+              </Badge>
+            )}
+            {sessionUser.premium && (
+              <Badge className="border-text-primary bg-surface text-text-primary">
+                <Crown size={12} />
+                Premium
               </Badge>
             )}
           </div>

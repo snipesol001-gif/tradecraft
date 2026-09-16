@@ -1,6 +1,6 @@
-// Reads and verifies the session cookie on the server. Used by layouts and
-// pages. checkRevoked=true does a network check against Firebase (used at
-// the gate), false is a fast local cryptographic check (used for display).
+// Reads and verifies the session cookie on the server. checkRevoked=true
+// does a network check against Firebase (used at gates), false is a fast
+// local check (used for display).
 
 import { cookies } from "next/headers";
 import { getAuth } from "firebase-admin/auth";
@@ -12,6 +12,7 @@ export type SessionUser = {
   emailVerified: boolean;
   privacyAccepted: boolean;
   onboarded: boolean;
+  premium: boolean;
   provider: string;
 };
 
@@ -27,6 +28,7 @@ export async function getSessionUser(checkRevoked = true): Promise<SessionUser |
       emailVerified: decoded.email_verified === true,
       privacyAccepted: decoded.pv === true,
       onboarded: decoded.onb === true,
+      premium: decoded.premium === true,
       provider:
         decoded.firebase?.sign_in_provider === "google.com"
           ? "Google"
