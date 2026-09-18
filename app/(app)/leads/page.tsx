@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Bookmark, ExternalLink } from "lucide-react";
+import { Bookmark, Check, Copy, ExternalLink, MessageSquareText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,6 +16,7 @@ import { cn } from "@/lib/cn";
 
 type Lead = {
   id: string;
+  opportunityId: string;
   status: string;
   notes: string;
   createdAtMs: number | null;
@@ -81,6 +82,50 @@ function LeadCard({
   const [notes, setNotes] = useState(lead.notes);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [reply, setReply] = useState<string | null>(null);
+  const [replyLoading, setReplyLoading] = useState(false);
+  const [replyError, setReplyError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function generateReply() {
+    setReplyLoading(true);
+    setReplyError(null);
+    try {
+      const res = await fetch("/api/reply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ opportunityId: lead.opportunityId }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.ok && typeof data.message === "string") {
+        setReply(data.message);
+      } else if (data?.error === "AI_NOT_CONFIGURED") {
+        setReplyError("AI features are not configured yet.");
+      } else {
+        setReplyError(
+          "The AI model is busy or unavailable right now. Please try again in a few minutes."
+        );
+      }
+    } catch {
+      setReplyError(
+        "The AI model is busy or unavailable right now. Please try again in a few minutes."
+      );
+    } finally {
+      setReplyLoading(false);
+    }
+  }
+
+  async function copyReply() {
+    if (!reply) return;
+    try {
+      await navigator.clipboard.writeText(reply);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard blocked: text is selectable anyway.
+    }
+  }
 
   const snap = lead.snapshot ?? {};
 
@@ -162,10 +207,68 @@ function LeadCard({
             </Button>
           </a>
         )}
-        <Button variant="secondary" className="flex-1" onClick={() => setOpen((v) => !v)}>
+        <Button
+          variant="secondary"
+          className="flex-1"
+          onClick={() => {
+            setOpen((v) => !v);
+            setReplyOpen(false);
+          }}
+        >
           {open ? "Hide details" : "Details"}
         </Button>
+        <Button
+          variant="secondary"
+          className="flex-1"
+          onClick={() => {
+            setReplyOpen((v) => !v);
+            setOpen(false);
+          }}
+        >
+          <MessageSquareText size={15} />
+          Suggest reply
+        </Button>
       </div>
+
+      {replyOpen && (
+        <div className="mt-4 rounded-xl border border-border bg-sunken p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-text-faint">
+            Suggested reply (draft only, you send it yourself)
+          </p>
+          {!reply && !replyError && (
+            <div className="mt-3">
+              <Button size="sm" onClick={generateReply} loading={replyLoading}>
+                {replyLoading ? "Drafting..." : "Draft my reply"}
+              </Button>
+            </div>
+          )}
+          {replyError && <p className="mt-3 text-sm text-danger">{replyError}</p>}
+          {reply && (
+            <>
+              <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-text-primary">
+                {reply}
+              </p>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <Button size="sm" variant="secondary" className="flex-1" onClick={copyReply}>
+                  {copied ? <Check size={14} /> : <Copy size={14} />}
+                  {copied ? "Copied" : "Copy reply"}
+                </Button>
+                {snap.url && (
+                  <a href={snap.url} target="_blank" rel="noopener noreferrer" className="flex-1">
+                    <Button size="sm" variant="ghost" className="w-full">
+                      Open the post to send it
+                    </Button>
+                  </a>
+                )}
+              </div>
+              <p className="mt-2 text-xs text-text-faint">
+                TradeCraft never sends messages for you. Review, adjust, and
+                send it yourself on the original platform.
+              </p>
+            </>
+          )}
+        </div>
+      )}
 
       {open && (
         <div className="mt-4 space-y-4 border-t border-border pt-4">

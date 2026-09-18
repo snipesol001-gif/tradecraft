@@ -116,6 +116,7 @@ export async function GET() {
     const v = d.data();
     return {
       id: d.id,
+      opportunityid: typeof v.opportunityid === "string" ? v.opportunityid : "",
       status: typeof v.status === "string" ? v.status : "new",
       notes: typeof v.notes === "string" ? v.notes : "",
       createdAtMs:
