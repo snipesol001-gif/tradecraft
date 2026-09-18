@@ -29,6 +29,11 @@ const FIELD_VALIDATORS: Record<string, (v: unknown) => string | null> = {
   yearsExperience: validateYearsExperience,
   portfolioUrl: validateOptionalUrl,
   websiteUrl: validateOptionalUrl,
+  theme: (v) => {
+    if (v === undefined || v === null || v === "") return null;
+    if (v === "light" || v === "dark" || v === "system") return null;
+    return "Invalid theme.";
+  },
 };
 
 export async function POST(req: NextRequest) {
