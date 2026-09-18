@@ -5,7 +5,11 @@
 
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { verifyAdminSession, destroyAllAdminSessions } from "@/lib/admin-auth";
+import {
+  ADMIN_COOKIE_NAME,
+  verifyAdminSession,
+  destroyAllAdminSessions,
+} from "@/lib/admin-auth";
 
 export async function POST() {
   const ownerEmail = process.env.OWNER_EMAIL ?? "";

@@ -187,9 +187,9 @@ async function ingestSource(
   db: ReturnType<typeof getFirestore>,
   ai: AIBudget
 ): Promise<SourceReport & { aiUsed: number }> {
-  const report = {
+  const report: SourceReport & { aiUsed: number } = {
     sourceId: source.sourceId,
-    status: "ok" as const,
+    status: "ok",
     fetched: 0,
     stored: 0,
     duplicates: 0,

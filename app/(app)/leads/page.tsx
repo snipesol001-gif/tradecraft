@@ -437,7 +437,7 @@ export default function LeadsPage() {
             </a>
           )}
         </Card>
-      ) : leads.length === 0 ? (
+      ) : (leads ?? []).length === 0 ? (
         <Card className="p-8 text-center">
           <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-sunken text-text-muted">
             <Bookmark size={20} />

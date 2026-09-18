@@ -32,9 +32,9 @@ export function getModelName(): string {
 function getModelChain(): string[] {
   const configured = process.env.GEMINI_MODEL;
   const fallback = process.env.GEMINI_MODEL_FALLBACK;
-  const chain = [configured, fallback, DEFAULT_MODEL].filter(
-    (m, i, arr) => typeof m === "string" && m.length > 0 && arr.indexOf(m) === i
-  );
+  const chain = [configured, fallback, DEFAULT_MODEL]
+    .filter((m): m is string => typeof m === "string" && m.length > 0)
+    .filter((m, i, arr) => arr.indexOf(m) === i);
   return chain.length > 0 ? chain : [DEFAULT_MODEL];
 }
 
@@ -305,7 +305,11 @@ export async function classifyIngestedItem(input: {
   | { ok: true; result: OpportunityClassification }
   | { ok: false; error: string; transient: boolean }
 > {
-  const result = await classifyOpportunity(input);
+  const result = await classifyOpportunity({
+    title: input.title,
+    body: input.summary,
+    serviceOptions: input.serviceOptions,
+  });
   if (result.ok) {
     return result;
   }

@@ -123,7 +123,7 @@ export default function JobFeedsPage() {
             </a>
           )}
         </Card>
-      ) : items.length === 0 ? (
+      ) : (items ?? []).length === 0 ? (
         <Card className="p-8 text-center">
           <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-sunken text-text-muted">
             <Newspaper size={20} />
@@ -137,7 +137,7 @@ export default function JobFeedsPage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {items.map((item) => (
+          {(items ?? []).map((item) => (
             <OpportunityCard
               key={item.id}
               item={item}

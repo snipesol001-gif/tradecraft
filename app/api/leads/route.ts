@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
           url: typeof opp.url === "string" ? opp.url : "",
           sourceName: typeof opp.sourceName === "string" ? opp.sourceName : "",
           score: typeof opp.score === "number" ? opp.score : 0,
-          publishedAtMs,
+          publishedAtMs: publishedMs,
         },
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),

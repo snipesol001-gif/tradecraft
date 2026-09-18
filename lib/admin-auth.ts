@@ -63,7 +63,7 @@ export async function verifyAdminSession(
   if (!snap.exists) {
     return { ok: false, reason: "NO_SESSION" };
   }
-  const d = snap.data();
+  const d = snap.data()!;
   if (typeof d.expiresAt !== "number" || d.expiresAt < Date.now()) {
     return { ok: false, reason: "NO_SESSION" };
   }
