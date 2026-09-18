@@ -3,16 +3,21 @@
 // The notification center. Live list, relative timestamps that refresh
 // every 30 seconds, click to mark read and open the target, mark all
 // read, and the pop-up toast preference switch (stored locally).
+//
+// Security sign-in records render distinctly (shield, Security tag) and
+// are permanent: the app has no notification-delete functionality at
+// all, Firestore rules forbid client deletion, and security records are
+// never removed server-side. Mark-read is the only change allowed.
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Bell, CheckCheck } from "lucide-react";
+import { Bell, CheckCheck, ShieldCheck } from "lucide-react";
 import { useNotifications, type AppNotification } from "@/hooks/use-notifications";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/cn";
+import { useRouter } from "next/navigation";
 
 function timeAgo(ms: number): string {
   const s = Math.max(1, Math.floor((Date.now() - ms) / 1000));
@@ -33,6 +38,8 @@ function NotificationRow({
   n: AppNotification;
   onOpen: (n: AppNotification) => void;
 }) {
+  const isSecurity = n.type === "security_login";
+
   return (
     <button
       type="button"
@@ -41,22 +48,41 @@ function NotificationRow({
         "flex w-full items-start gap-3 rounded-xl border p-4 text-left transition-colors duration-150",
         n.read
           ? "border-border/60 bg-surface"
-          : "border-border bg-sunken hover:border-border-strong"
+          : isSecurity
+            ? "border-border-strong bg-sunken hover:border-text-faint"
+            : "border-border bg-sunken hover:border-border-strong"
       )}
     >
-      <span
-        className={cn(
-          "mt-1.5 h-2 w-2 shrink-0 rounded-full",
-          n.read ? "bg-transparent" : "bg-text-primary"
-        )}
-        aria-hidden
-      />
+      {isSecurity ? (
+        <ShieldCheck size={16} className="mt-0.5 shrink-0 text-text-primary" />
+      ) : (
+        <span
+          className={cn(
+            "mt-1.5 h-2 w-2 shrink-0 rounded-full",
+            n.read ? "bg-transparent" : "bg-text-primary"
+          )}
+          aria-hidden
+        />
+      )}
       <span className="min-w-0 flex-1">
-        <span className="flex items-center justify-between gap-3">
+        <span className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-semibold text-text-primary">{n.title}</span>
-          <span className="shrink-0 text-xs text-text-faint">{timeAgo(n.createdAtMs)}</span>
+          {isSecurity && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-2 py-0.5 text-[10px] font-medium text-text-muted">
+              <ShieldCheck size={10} />
+              Security
+            </span>
+          )}
+          <span className="ml-auto shrink-0 text-xs text-text-faint">
+            {timeAgo(n.createdAtMs)}
+          </span>
         </span>
         <span className="mt-0.5 block text-sm leading-relaxed text-text-muted">{n.body}</span>
+        {isSecurity && (
+          <span className="mt-1 block text-xs text-text-faint">
+            Permanent security record: cannot be deleted, only marked read.
+          </span>
+        )}
       </span>
     </button>
   );
@@ -68,8 +94,6 @@ export default function NotificationsPage() {
     useNotifications();
   const [toastsOn, setToastsOn] = useState(true);
 
-  // Load the toast preference once. It lives in localStorage for now;
-  // a server-side preference field can replace it in a later phase.
   useEffect(() => {
     try {
       setToastsOn(localStorage.getItem("tc-toasts-enabled") !== "off");
@@ -109,9 +133,11 @@ export default function NotificationsPage() {
             Notifications
           </h1>
           <p className="mt-1 text-sm text-text-muted">
-            {unreadCount === 0
-              ? "You are all caught up."
-              : `${unreadCount} unread notification${unreadCount === 1 ? "" : "s"}.`}
+            {error
+              ? "Could not load your notifications."
+              : unreadCount === 0
+                ? "You are all caught up."
+                : `${unreadCount} unread notification${unreadCount === 1 ? "" : "s"}.`}
           </p>
         </div>
         {unreadCount > 0 && (
@@ -127,7 +153,7 @@ export default function NotificationsPage() {
           type="checkbox"
           checked={toastsOn}
           onChange={toggleToasts}
-          className="accent-neutral-900 dark:accent-white"
+          className="mt-0.5 accent-neutral-900 dark:accent-white"
         />
         Show pop-up toasts for new notifications
       </label>
@@ -163,8 +189,8 @@ export default function NotificationsPage() {
               No notifications yet
             </h2>
             <p className="mt-1 max-w-xs text-sm text-text-muted">
-              Referral rewards and account updates will land here. Invite
-              friends from your profile to get started.
+              Referral rewards, security sign-in records, and account updates
+              will land here. Invite friends from your profile to get started.
             </p>
             <Link href="/profile" className="mt-5">
               <Button variant="secondary">Go to profile</Button>

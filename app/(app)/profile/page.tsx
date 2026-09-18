@@ -5,11 +5,21 @@ import { getSessionUser } from "@/lib/session";
 import { getAdminApp } from "@/lib/firebase-admin";
 import { ensureReferralCode } from "@/lib/referral";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
+import { Card, CardBody } from "@/components/ui/card";
 import ProfileForm from "@/components/profile/profile-form";
 import ReferralCard from "@/components/profile/referral-card";
 import SignOutButton from "@/components/app/sign-out-button";
 
+function timeAgo(ms: number): string {
+  const s = Math.max(1, Math.floor((Date.now() - ms) / 1000));
+  if (s < 60) return "just now";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
 export const metadata = { title: "Profile" };
 
 export default async function ProfilePage() {
@@ -26,6 +36,22 @@ export default async function ProfilePage() {
     .count()
     .get();
   const referralCount = countSnap.data().count;
+    const signinsSnap = await db
+    .collection("loginEvents")
+    .where("uid", "==", sessionUser.uid)
+    .orderBy("createdAt", "desc")
+    .limit(5)
+    .get();
+  const recentSignins = signinsSnap.docs.map((doc) => {
+    const v = doc.data();
+    return {
+      provider: typeof v.provider === "string" ? v.provider : "Unknown method",
+      createdAtMs:
+        v.createdAt && typeof v.createdAt.toMillis === "function"
+          ? v.createdAt.toMillis()
+          : null,
+    };
+  });
 
   let referralCode = typeof d.referralCode === "string" ? d.referralCode : null;
   if (!referralCode) {
@@ -120,6 +146,37 @@ export default async function ProfilePage() {
         </div>
       </section>
 
+            <section>
+        <p className="eyebrow">Recent sign-ins</p>
+        <p className="mt-1 text-sm text-text-muted">
+          Permanent security record. If you do not recognize an entry, reset
+          your password immediately.
+        </p>
+        <Card className="mt-4">
+          <CardBody className="space-y-3">
+            {recentSignins.length === 0 ? (
+              <p className="text-sm text-text-muted">
+                No sign-in records yet. They appear here after your next
+                sign-in.
+              </p>
+            ) : (
+              recentSignins.map((s, i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between gap-4 border-b border-border pb-3 last:border-0 last:pb-0"
+                >
+                  <span className="text-sm text-text-primary">
+                    Signed in via {s.provider}
+                  </span>
+                  <span className="shrink-0 text-xs text-text-faint">
+                    {s.createdAtMs ? timeAgo(s.createdAtMs) : ""}
+                  </span>
+                </div>
+              ))
+            )}
+          </CardBody>
+        </Card>
+      </section>
       <section className="pt-2">
         <div className="mx-auto max-w-xs">
           <SignOutButton />

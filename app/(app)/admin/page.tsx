@@ -1,10 +1,9 @@
-// The admin area. Phase 5 scope: Premium management only. Owner-gated
-// server-side via OWNER_EMAIL. Non-owners receive a 404: admin routes
-// should not confirm their own existence to strangers. Phase 7 expands
-// this page into the full admin console.
+// The admin console. Owner-only via the dedicated admin session. Phase 5
+// scope: Premium management. Phase 7 expands this into the full console.
 
 import { notFound } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
+import { isOwnerEmail, verifyAdminSession } from "@/lib/admin-auth";
 import PremiumManager from "@/components/admin/premium-manager";
 
 export const metadata = { title: "Admin" };
@@ -14,14 +13,17 @@ export default async function AdminPage() {
   if (!sessionUser) notFound();
 
   const ownerEmail = process.env.OWNER_EMAIL ?? "";
-  if (!ownerEmail || sessionUser.email?.toLowerCase() !== ownerEmail.toLowerCase()) {
-    notFound();
-  }
+  if (!isOwnerEmail(sessionUser.email)) notFound();
+
+  // The admin cookie must be live. If it expired (2 hours), the owner
+  // re-opens it from /admin/login with one click.
+  const admin = await verifyAdminSession(ownerEmail);
+  if (!admin.ok) notFound();
 
   return (
     <div className="space-y-6">
       <div>
-        <p className="eyebrow">Admin</p>
+        <p className="eyebrow">Admin console</p>
         <h1 className="mt-1 text-2xl font-bold tracking-tight text-text-primary">
           Premium management
         </h1>
