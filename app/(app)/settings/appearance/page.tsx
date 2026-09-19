@@ -52,7 +52,7 @@ export default function AppearancePage() {
       await fetch("/api/profile/update", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ patch: { theme } }),
+        body: JSON.stringify({ patch: { theme: choice } }),
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
