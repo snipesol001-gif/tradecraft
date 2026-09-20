@@ -19,7 +19,17 @@ const variants: Record<Variant, string> = {
 type CardProps = HTMLAttributes<HTMLDivElement> & { variant?: Variant };
 
 export function Card({ variant = "default", className, ...props }: CardProps) {
-  return <div className={cn("rounded-xl", variants[variant], className)} {...props} />;
+  return (
+    <div
+      className={cn(
+        "rounded-xl",
+        variants[variant],
+        variant !== "warning" && "tc-card",
+        className
+      )}
+      {...props}
+    />
+  );
 }
 
 export function CardTitle({ className, ...props }: HTMLAttributes<HTMLHeadingElement>) {
