@@ -1,15 +1,12 @@
-// Explore Premium: plan cards, checkout redirect, and on-return payment
-// verification. Free users see the plans; Premium users see their status.
-
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Check } from "lucide-react";
+import { Crown } from "lucide-react";
 import { getSessionUser } from "@/lib/session";
 import { getPremiumStatus } from "@/lib/premium";
 import { getPremiumPlansConfig } from "@/lib/premium-config";
 import PremiumPlansClient from "@/components/premium/premium-plans-client";
 import { Badge } from "@/components/ui/badge";
-import { Crown } from "lucide-react";
+import { Card, CardBody } from "@/components/ui/card";
 
 export const metadata = { title: "Explore Premium" };
 

@@ -8,7 +8,11 @@ import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getAdminApp } from "@/lib/firebase-admin";
 import { getSessionUser } from "@/lib/session";
 import { verifyTransaction } from "@/lib/payments/paystack";
-import { getPremiumPlansConfig, planDays, planPriceNaira } from "@/lib/premium-config";
+import {
+  getPremiumPlansConfig,
+  planDays,
+  planPriceNaira,
+} from "@/lib/premium-config";
 import { activatePremiumForPayment } from "@/lib/premium";
 
 export async function GET(req: NextRequest) {
@@ -29,7 +33,6 @@ export async function GET(req: NextRequest) {
 
   const payment = verified.payment;
   if (payment.uid !== sessionUser.uid) {
-    // A reference from someone else's checkout can never activate here.
     return NextResponse.json({ ok: false, error: "NOT_YOUR_PAYMENT" }, { status: 403 });
   }
 
@@ -40,7 +43,6 @@ export async function GET(req: NextRequest) {
   const config = await getPremiumPlansConfig();
   const expectedKobo = planPriceNaira(payment.plan, config) * 100;
   if (payment.amountKobo < expectedKobo) {
-    // Amount tampering or config changed mid-flight: record, refuse.
     console.error(
       `[premium] amount mismatch on ${reference}: got ${payment.amountKobo}, expected ${expectedKobo}`
     );
@@ -50,12 +52,15 @@ export async function GET(req: NextRequest) {
   const db = getFirestore(getAdminApp());
   const gateRef = db.collection("paymentEvents").doc(reference);
 
-  let activation: { alreadyProcessed: boolean } | null = null;
+  // The gate: create() inside the transaction only succeeds for the
+  // first processor of this reference. Everyone else sees it exists and
+  // stops. This is what makes webhook-and-verify races safe.
+  let alreadyProcessed = false;
   try {
     await db.runTransaction(async (tx) => {
       const gateSnap = await tx.get(gateRef);
       if (gateSnap.exists) {
-        activation = { alreadyProcessed: true };
+        alreadyProcessed = true;
         return;
       }
       tx.create(gateRef, {
@@ -65,20 +70,19 @@ export async function GET(req: NextRequest) {
         amountKobo: payment.amountKobo,
         processedAt: FieldValue.serverTimestamp(),
       });
-      activation = { alreadyProcessed: false };
     });
   } catch (err) {
     console.error("[premium] gate transaction failed:", err);
     return NextResponse.json({ ok: false, error: "VERIFY_FAILED" }, { status: 500 });
   }
 
-  if (activation && activation.alreadyProcessed) {
+  if (alreadyProcessed) {
     return NextResponse.json({ ok: true, alreadyProcessed: true });
   }
 
   const days = planDays(payment.plan, config);
   const amountNaira = planPriceNaira(payment.plan, config);
-  const activationResult = await activatePremiumForPayment({
+  const activation = await activatePremiumForPayment({
     uid: payment.uid,
     durationDays: days,
     reference,
@@ -88,6 +92,6 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     activated: true,
-    expiresAtMs: activationResult.expiresAtMs,
+    expiresAtMs: activation.expiresAtMs,
   });
 }
