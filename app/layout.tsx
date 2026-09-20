@@ -24,11 +24,13 @@ export const metadata: Metadata = {
   description: BRAND.description,
 };
 
-// Runs before first paint: reads the saved theme and sets the .dark class
-// immediately, preventing any flash of the wrong theme. next/script with
-// the beforeInteractive strategy is the Next 16 supported way to do this;
-// raw script tags inside components are refused.
-const themeInitScript = `(function(){try{var t=localStorage.getItem("tc-theme");var dark=t==="dark"||((t===null||t==="system")&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",dark);}catch(e){}})();`;
+// Pre-paint theme application. Mirrors the id-to-base map in
+// lib/themes.ts (the script cannot import TypeScript, so the small map
+// is duplicated here; both carry a comment pointing at the other).
+// Resolves "system" against the OS preference, then sets the .dark class
+// and the data-theme attribute for named looks.
+
+const themeInitScript = `(function(){try{var t=localStorage.getItem("tc-theme")||"system";if(t==="system"){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";}var m={light:[0,0],dark:[1,0],midnight:[1,1],"indigo-drift":[1,1],"golden-horizon":[1,1],"prism-glow":[1,1],"twilight-ember":[1,1],"abyssal-blue":[1,1],"sakura-drift":[0,1]};var e=m[t]||m.light;document.documentElement.classList.toggle("dark",e[0]===1);if(e[1]===1){document.documentElement.setAttribute("data-theme",t);}else{document.documentElement.removeAttribute("data-theme");}}catch(e){}})();`;
 
 export default function RootLayout({
   children,

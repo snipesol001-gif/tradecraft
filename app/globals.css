@@ -267,3 +267,115 @@
     transform: translate(6rem, -3rem) scale(0.97);
   }
 }
+
+/* ------------------------------------------------------------------
+   Named themes. Each block overrides the neutral tokens and primary
+   pair for its data-theme. Status colors are intentionally inherited
+   from the base (light or .dark) so semantics stay consistent.
+   Blocks must appear after the .dark block above to win the cascade.
+   ------------------------------------------------------------------ */
+
+[data-theme="midnight"] {
+  --background: #060913;
+  --surface: #0d1220;
+  --surface-raised: #131a2c;
+  --surface-sunken: #090d18;
+  --border: #1c2438;
+  --border-strong: #2a3550;
+  --text-primary: #e5e9f2;
+  --text-muted: #8b93a7;
+  --text-faint: #565e73;
+  --primary: #e5e9f2;
+  --primary-foreground: #060913;
+  --ring: #e5e9f2;
+}
+
+[data-theme="indigo-drift"] {
+  --background: #0a0a14;
+  --surface: #12121f;
+  --surface-raised: #1a1a2e;
+  --surface-sunken: #0e0e19;
+  --border: #262640;
+  --border-strong: #3a3a5c;
+  --text-primary: #eceafd;
+  --text-muted: #a5a3c7;
+  --text-faint: #67658c;
+  --primary: #eceafd;
+  --primary-foreground: #0a0a14;
+  --ring: #eceafd;
+}
+
+[data-theme="golden-horizon"] {
+  --background: #0f0c08;
+  --surface: #171310;
+  --surface-raised: #201a14;
+  --surface-sunken: #120e0a;
+  --border: #2e2618;
+  --border-strong: #453a26;
+  --text-primary: #f5efe2;
+  --text-muted: #b3a68c;
+  --text-faint: #7a7060;
+  --primary: #f5efe2;
+  --primary-foreground: #0f0c08;
+  --ring: #f5efe2;
+}
+
+[data-theme="prism-glow"] {
+  --background: #0d0a14;
+  --surface: #151020;
+  --surface-raised: #1e1730;
+  --surface-sunken: #110d1a;
+  --border: #2c2340;
+  --border-strong: #413361;
+  --text-primary: #f0eafd;
+  --text-muted: #b0a5cc;
+  --text-faint: #776b94;
+  --primary: #f0eafd;
+  --primary-foreground: #0d0a14;
+  --ring: #f0eafd;
+}
+
+[data-theme="twilight-ember"] {
+  --background: #120b0b;
+  --surface: #1c1212;
+  --surface-raised: #261919;
+  --surface-sunken: #150d0d;
+  --border: #382323;
+  --border-strong: #523434;
+  --text-primary: #f7ecec;
+  --text-muted: #c4a5a5;
+  --text-faint: #846868;
+  --primary: #f7ecec;
+  --primary-foreground: #120b0b;
+  --ring: #f7ecec;
+}
+
+[data-theme="abyssal-blue"] {
+  --background: #04101c;
+  --surface: #081827;
+  --surface-raised: #0c2236;
+  --surface-sunken: #061420;
+  --border: #14304a;
+  --border-strong: #1e4a6e;
+  --text-primary: #e2f0fa;
+  --text-muted: #8fb3c9;
+  --text-faint: #5b7f97;
+  --primary: #e2f0fa;
+  --primary-foreground: #04101c;
+  --ring: #e2f0fa;
+}
+
+[data-theme="sakura-drift"] {
+  --background: #faf5f6;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f6ecee;
+  --border: #ecd8dd;
+  --border-strong: #dcbcc4;
+  --text-primary: #2b1e22;
+  --text-muted: #7a626b;
+  --text-faint: #b39aa2;
+  --primary: #2b1e22;
+  --primary-foreground: #faf5f6;
+  --ring: #2b1e22;
+}

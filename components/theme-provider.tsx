@@ -1,10 +1,11 @@
 "use client";
 
-// TradeCraft's theme system, hand-rolled (no dependency). Persists the
-// choice in localStorage under "tc-theme", applies the .dark class to
-// <html>, follows the OS when set to system. An inline script in the
-// root layout applies the saved theme before first paint, so there is
-// no flash of the wrong theme on load.
+// The theme system. Themes are ids from lib/themes.ts: free modes
+// (light, dark, system) plus named premium looks. Application is two
+// layers: the .dark class per the theme's base mode, and a data-theme
+// attribute carrying the look's CSS overrides. The choice persists in
+// localStorage (applied pre-paint by the layout script) and can be
+// saved to the account from the appearance page.
 
 import {
   createContext,
@@ -13,49 +14,54 @@ import {
   useEffect,
   useState,
 } from "react";
+import { resolveTheme } from "@/lib/themes";
 
-export type Theme = "light" | "dark" | "system";
+export type Theme = string; // a theme id from lib/themes.ts
 
 const STORAGE_KEY = "tc-theme";
+const DEFAULT_THEME = "system";
 
 type ThemeContextValue = {
   theme: Theme;
-  resolved: "light" | "dark";
+  resolvedDark: boolean;
   setTheme: (t: Theme) => void;
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-function applyTheme(theme: Theme): "light" | "dark" {
+function applyTheme(theme: Theme): boolean {
   const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const resolved = theme === "system" ? (prefersDark ? "dark" : "light") : theme;
-  document.documentElement.classList.toggle("dark", resolved === "dark");
-  return resolved;
+  const resolved = resolveTheme(theme, prefersDark);
+  document.documentElement.classList.toggle("dark", resolved.dark);
+  if (resolved.dataTheme) {
+    document.documentElement.setAttribute("data-theme", resolved.dataTheme);
+  } else {
+    document.documentElement.removeAttribute("data-theme");
+  }
+  return resolved.dark;
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("system");
-  const [resolved, setResolved] = useState<"light" | "dark">("light");
+  const [theme, setThemeState] = useState<Theme>(DEFAULT_THEME);
+  const [resolvedDark, setResolvedDark] = useState(false);
 
   useEffect(() => {
-    let initial: Theme = "system";
+    let initial: Theme = DEFAULT_THEME;
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored === "light" || stored === "dark" || stored === "system") {
-        initial = stored;
-      }
+      if (stored) initial = stored;
     } catch {
-      // Storage unavailable (some private modes): system default is fine.
+      // Storage unavailable: default.
     }
     setThemeState(initial);
-    setResolved(applyTheme(initial));
+    setResolvedDark(applyTheme(initial));
   }, []);
 
-  // While in system mode, follow OS changes live.
+  // Follow OS changes only while on the system theme.
   useEffect(() => {
-    if (theme !== "system") return;
+    if (theme !== DEFAULT_THEME) return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => setResolved(applyTheme("system"));
+    const onChange = () => setResolvedDark(applyTheme(theme));
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
   }, [theme]);
@@ -65,13 +71,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     try {
       localStorage.setItem(STORAGE_KEY, t);
     } catch {
-      // Non-fatal: theme still applies for this session.
+      // Non-fatal: applies for this session regardless.
     }
-    setResolved(applyTheme(t));
+    setResolvedDark(applyTheme(t));
   }, []);
 
   return (
-    <ThemeContext.Provider value={{ theme, resolved, setTheme }}>
+    <ThemeContext.Provider value={{ theme, resolvedDark, setTheme }}>
       {children}
     </ThemeContext.Provider>
   );
