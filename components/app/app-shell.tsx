@@ -1,15 +1,14 @@
 "use client";
 
-// The frame for all signed-in pages. Desktop: fixed sidebar with active
-// indicators, brand mark, theme toggle, and sign out. Mobile: translucent
-// top bar plus a five-item bottom navigation with an active dot. New
-// notifications raise the unread badge and fire a toast (unless the user
-// switched pop-up toasts off), per the product spec.
+// The frame for all signed-in pages. Desktop: sidebar with six items
+// (including Explore Premium). Mobile: translucent top bar (with a
+// Premium shortcut) plus the five-item bottom navigation. New
+// notifications raise the unread badge and fire toasts per preference.
 
 import { useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Bell, Bookmark, Home, Radar, User } from "lucide-react";
+import { Bell, Bookmark, Crown, Home, Radar, User } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useNotifications } from "@/hooks/use-notifications";
 import { useToast } from "@/components/ui/toast";
@@ -24,9 +23,8 @@ const navItems = [
   { label: "Profile", href: "/profile", icon: User },
 ];
 
-// Items whose href carries a query string (Scout, Leads, Notifications
-// previously) match the full URL exactly, so only one can ever be active.
-// Items without a query also match sub-paths (for example /profile).
+const premiumItem = { label: "Explore Premium", href: "/premium", icon: Crown };
+
 function isActive(currentUrl: string, href: string): boolean {
   if (href.includes("?")) {
     return currentUrl === href;
@@ -118,6 +116,22 @@ export default function AppShell({
               </Link>
             );
           })}
+
+          {/* Premium entry, visually distinct */}
+          <div className="pt-3">
+            <Link
+              href="/premium"
+              className={cn(
+                "flex items-center gap-3 rounded-lg border px-3 py-2 text-sm font-medium transition-colors duration-150",
+                isActive(currentUrl, premiumItem.href)
+                  ? "border-text-primary bg-sunken text-text-primary"
+                  : "border-border bg-surface text-text-muted hover:border-border-strong hover:text-text-primary"
+              )}
+            >
+              <premiumItem.icon size={18} />
+              {premiumItem.label}
+            </Link>
+          </div>
         </nav>
 
         <div className="space-y-3 border-t border-border p-4">
@@ -129,14 +143,21 @@ export default function AppShell({
         </div>
       </aside>
 
-      {/* Mobile top bar: the one deliberate translucent surface */}
+      {/* Mobile top bar */}
       <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-border bg-surface/85 px-4 backdrop-blur-md md:hidden">
         <Link href="/dashboard" className="flex items-center gap-2">
           <BrandMark />
           <span className="font-semibold tracking-tight text-text-primary">TradeCraft</span>
         </Link>
         <div className="flex items-center gap-1.5">
-          <ThemeToggle />
+          <Link
+            href="/premium"
+            aria-label="Explore Premium"
+            className="flex h-9 items-center gap-1 rounded-lg border border-border bg-surface px-2 text-xs font-medium text-text-primary"
+          >
+            <Crown size={13} />
+            Premium
+          </Link>
           <Link
             href="/profile"
             aria-label="Profile"

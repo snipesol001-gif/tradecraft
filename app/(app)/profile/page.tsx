@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getFirestore } from "firebase-admin/firestore";
 import { CheckCircle2, Crown } from "lucide-react";
 import { getSessionUser } from "@/lib/session";
@@ -110,6 +111,17 @@ export default async function ProfilePage() {
             <dt className="text-text-muted">Sign-in method</dt>
             <dd className="font-medium text-text-primary">{sessionUser.provider}</dd>
           </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-text-muted">Appearance</dt>
+            <dd>
+              <Link
+                href="/settings/appearance"
+                className="text-sm underline underline-offset-4"
+              >
+                Themes and display
+              </Link>
+            </dd>
+          </div>
         </dl>
       </Card>
 
@@ -135,6 +147,26 @@ export default async function ProfilePage() {
           />
         </div>
       </section>
+
+            {!sessionUser.premium && (
+        <section>
+          <Link href="/premium" className="block">
+            <Card variant="interactive" className="p-5">
+              <div className="flex items-center gap-4">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-sunken text-text-primary">
+                  <Crown size={20} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-text-primary">Explore Premium</p>
+                  <p className="mt-0.5 text-xs text-text-muted">
+                    The Website Analyzer, premium themes, and more.
+                  </p>
+                </div>
+              </div>
+            </Card>
+          </Link>
+        </section>
+      )}
 
       <section>
         <p className="eyebrow">Invite friends</p>
