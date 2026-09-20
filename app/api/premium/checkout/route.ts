@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuth } from "firebase-admin/auth";
 import { getAdminApp } from "@/lib/firebase-admin";
+import { getPremiumPlusStatus, getPremiumStatus } from "@/lib/premium";
 import { getSessionUser } from "@/lib/session";
 import {
   getPremiumPlansConfig,
@@ -63,6 +64,11 @@ export async function POST(req: NextRequest) {
   const premium = await getPremiumStatus(sessionUser.uid);
   if (premium.active) {
     return NextResponse.json({ ok: false, error: "ALREADY_PREMIUM" }, { status: 409 });
+  }
+
+  const plus = await getPremiumPlusStatus(sessionUser.uid);
+  if (plus.active) {
+    return NextResponse.json({ ok: false, error: "ALREADY_PREMIUM_PLUS" }, { status: 409 });
   }
 
   // Price and days resolve per plan, server-side.

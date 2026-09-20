@@ -70,7 +70,7 @@ export const THEMES: ThemeDef[] = [
     tier: "premium_plus",
     base: "dark",
     previewGradient:
-      "radial-gradient(ellipse 70% 60% at 15% -10%, rgba(168, 148, 255, 0.55), transparent 60%), radial-gradient(ellipse 60% 55% at 95% 25%, rgba(90, 220, 208, 0.4), transparent 62%), radial-gradient(ellipse 70% 55% at 45% 120%, rgba(233, 128, 196, 0.42), transparent 64%), linear-gradient(165deg, #2a1c52 0%, #150d33 65%, #0e0926 100%)",
+      "linear-gradient(105deg, #1a1147 0%, #3d1866 26%, #6e2a5e 52%, #274369 78%, #0d1b33 100%)",
   },
   {
     id: "twilight-ember",
@@ -78,7 +78,7 @@ export const THEMES: ThemeDef[] = [
     tier: "premium_plus",
     base: "dark",
     previewGradient:
-      "radial-gradient(ellipse 90% 65% at 50% 125%, rgba(232, 92, 56, 0.55), transparent 70%), radial-gradient(ellipse 55% 45% at 88% -8%, rgba(214, 70, 90, 0.32), transparent 65%), linear-gradient(172deg, #3d1220 0%, #1d0a14 68%, #120710 100%)",
+      "linear-gradient(215deg, #4a1230 0%, #7a1e30 30%, #a83a1e 55%, #3a140c 82%, #140a08 100%)",
   },
   {
     id: "abyssal-blue",
@@ -86,7 +86,7 @@ export const THEMES: ThemeDef[] = [
     tier: "premium_plus",
     base: "dark",
     previewGradient:
-      "radial-gradient(ellipse 90% 60% at 50% -12%, rgba(60, 190, 220, 0.48), transparent 64%), radial-gradient(ellipse 70% 55% at 5% 115%, rgba(10, 90, 120, 0.42), transparent 70%), linear-gradient(175deg, #0a2438 0%, #041222 62%, #020b16 100%)",
+      "linear-gradient(135deg, #0e3a5e 0%, #0d4a70 28%, #0a5a6e 52%, #063647 76%, #02101c 100%)",
   },
   {
     id: "sakura-drift",
@@ -94,7 +94,7 @@ export const THEMES: ThemeDef[] = [
     tier: "premium_plus",
     base: "light",
     previewGradient:
-      "radial-gradient(ellipse 70% 60% at 8% -12%, rgba(228, 208, 248, 0.8), transparent 62%), radial-gradient(ellipse 80% 60% at 95% 115%, rgba(248, 205, 222, 0.7), transparent 68%), linear-gradient(168deg, #fdf7fa 0%, #faeef3 55%, #f7ecf2 100%)",
+      "linear-gradient(20deg, #ede4f7 0%, #f9e8f0 35%, #ffffff 60%, #fdf2f6 100%)",
   },
 ];
 

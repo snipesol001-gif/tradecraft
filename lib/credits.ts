@@ -2,19 +2,18 @@
 //   - creditBalance: EARNED credits (referral rewards, admin grants,
 //     future purchases). NEVER reset or expired. Sit until spent.
 //   - dailyBalance: the daily allowance. Resets to config.dailyFreeCredits
-//     when creditNextResetAt passes (lazy reset: applied on the first
-//     credit operation after the reset time; away three days, return to
-//     exactly one fresh allowance, no rollover).
+//     when creditNextResetAt passes (lazy reset; no rollover).
 // Spending draws from the daily bucket first, keeping earned credits safe.
 // Every change appends a ledger entry. All mutations run in transactions.
 //
-// Migration note: accounts created before the two-bucket model have a
-// single creditBalance (which mixed daily and earned). That value becomes
-// their earned balance on first touch; the daily bucket initializes via
-// the normal lazy reset. Correct going forward.
+// Premium+ entitlement: while active, spends cost nothing. The spend is
+// still recorded in the ledger with a zero delta, so history stays
+// complete and honest. The entitlement check lives in spendCredits (the
+// function that actually charges), NOT in getCreditState (a pure read).
 
 import { FieldValue, getFirestore, type Transaction, type DocumentReference } from "firebase-admin/firestore";
 import { getAdminApp } from "./firebase-admin";
+import { getPremiumPlusStatus } from "./premium";
 
 export type CreditReason =
   | "daily_allocation"
@@ -87,8 +86,6 @@ export async function getCreditsConfig(): Promise<CreditsConfig> {
     referralRewardReferee: requireInt(d.referralRewardReferee, "referralRewardReferee"),
     referralMaxRewardsPerDay: requireInt(d.referralMaxRewardsPerDay, "referralMaxRewardsPerDay"),
     referralProgramActive: d.referralProgramActive === true,
-    // Optional with a safe default, so the existing config document keeps
-    // working before the owner sets this field.
     scoutDiscoveryCost:
       d.scoutDiscoveryCost === undefined
         ? 1
@@ -116,8 +113,7 @@ export function computeNextResetAt(resetHourUtc: number, nowMs: number): number 
 }
 
 // READ ONLY. Computes both buckets from a user doc snapshot, applying the
-// daily reset in memory if due. No writes. Callers write explicitly, which
-// keeps the reads-before-writes transaction rule satisfiable.
+// daily reset in memory if due. No writes. Callers write explicitly.
 export function computeBuckets(
   data: Record<string, unknown> | undefined,
   config: CreditsConfig,
@@ -160,8 +156,8 @@ export function writeLedgerEntry(
   });
 }
 
-// Writes both buckets. Callers pass computed states; this performs no
-// reads, so it is safe after all reads inside a transaction.
+// Writes both buckets. Performs no reads, so it is safe after all reads
+// inside a transaction.
 export function writeBuckets(
   tx: Transaction,
   userRef: DocumentReference,
@@ -258,6 +254,31 @@ export async function spendCredits(params: {
   const config = await getCreditsConfig();
   const db = getFirestore(getAdminApp());
   const userRef = db.collection("users").doc(uid);
+
+  // Premium+ entitlement: unlimited credits while active. Server-side
+  // check, and the ledger records a zero-delta entry so history stays
+  // complete and honest. No transaction needed: nothing is deducted.
+  const plus = await getPremiumPlusStatus(uid);
+  if (plus.active) {
+    const state = await getCreditState(uid);
+    await db.collection("creditLedger").add({
+      uid,
+      delta: 0,
+      reason,
+      refId: refId ?? null,
+      actorUid: null,
+      balanceAfter: state.total,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return {
+      total: state.total,
+      earned: state.earned,
+      daily: state.daily,
+      nextResetAt: state.nextResetAt,
+      dailyAllowance: config.dailyFreeCredits,
+    };
+  }
+
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(userRef);
     const now = Date.now();
