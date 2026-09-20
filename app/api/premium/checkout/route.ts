@@ -18,7 +18,6 @@ import {
   makeReference,
   nairaToKobo,
 } from "@/lib/payments/paystack";
-import { getPremiumStatus } from "@/lib/premium";
 import type { PremiumPlan } from "@/lib/payments/types";
 
 export async function POST(req: NextRequest) {
