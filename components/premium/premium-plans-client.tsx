@@ -11,7 +11,7 @@ import { Card, CardBody } from "@/components/ui/card";
 import { cn } from "@/lib/cn";
 
 type PlanView = {
-  id: "weekly" | "monthly" | "premium_plus";
+  id: "weekly" | "premium_plus";
   name: string;
   priceNaira: number;
   period: string;

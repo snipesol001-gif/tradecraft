@@ -1,15 +1,14 @@
-// The Paystack webhook. Production path for async confirmations (bank
-// transfers, DVA). Signature-verified with HMAC-SHA512 over the RAW body
-// against PAYSTACK_SECRET_KEY. Idempotent via the same paymentEvents
-// gate as the verify route. Manual runs never touch this; only Paystack
-// POSTs here.
+// The Paystack webhook. Signature-verified with HMAC-SHA512 over the RAW
+// body. Per-plan price and duration resolution (Premium, legacy monthly,
+// Premium+), idempotent via the paymentEvents gate.
 
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getAdminApp } from "@/lib/firebase-admin";
 import { verifyWebhookSignature } from "@/lib/payments/paystack";
-import { getPremiumPlansConfig, planDays, planPriceNaira } from "@/lib/premium-config";
+import { getPremiumPlansConfig } from "@/lib/premium-config";
 import { activatePremiumForPayment } from "@/lib/premium";
+import type { PremiumPlan } from "@/lib/payments/types";
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
@@ -35,13 +34,18 @@ export async function POST(req: NextRequest) {
   }
 
   if (event?.event !== "charge.success" || !event.data) {
-    // Acknowledge other event types honestly: Paystack stops retrying.
     return NextResponse.json({ ok: true, ignored: event?.event ?? "unknown" });
   }
 
   const reference = event.data.reference ?? "";
   const uid = event.data.metadata?.uid ?? "";
-  const plan = event.data.metadata?.plan === "monthly" ? "monthly" : event.data.metadata?.plan === "weekly" ? "weekly" : null;
+  const rawPlan = event.data.metadata?.plan;
+  // The full three-tier union, explicitly typed, so later comparisons
+  // against "premium_plus" are valid to the compiler.
+  const plan: PremiumPlan | null =
+    rawPlan === "weekly" || rawPlan === "monthly" || rawPlan === "premium_plus"
+      ? rawPlan
+      : null;
   const status = event.data.status;
 
   if (!reference || !uid || !plan || status !== "success") {
@@ -49,10 +53,30 @@ export async function POST(req: NextRequest) {
   }
 
   const config = await getPremiumPlansConfig();
-  const expectedKobo = planPriceNaira(plan, config) * 100;
+
+  // Per-plan price and duration, server-resolved.
+  let expectedKobo: number;
+  let days: number;
+  let amountNaira: number;
+  if (plan === "premium_plus") {
+    expectedKobo = config.premiumPlusMonthlyNaira * 100;
+    days = config.premiumPlusDays;
+    amountNaira = config.premiumPlusMonthlyNaira;
+  } else if (plan === "monthly") {
+    expectedKobo = config.monthlyPriceNaira * 100;
+    days = config.monthlyDays;
+    amountNaira = config.monthlyPriceNaira;
+  } else {
+    expectedKobo = config.weeklyPriceNaira * 100;
+    days = config.weeklyDays;
+    amountNaira = config.weeklyPriceNaira;
+  }
+
   const amountKobo = typeof event.data.amount === "number" ? event.data.amount : 0;
   if (amountKobo < expectedKobo) {
-    console.error(`[webhook] amount mismatch on ${reference}: ${amountKobo} < ${expectedKobo}`);
+    console.error(
+      `[webhook] amount mismatch on ${reference}: ${amountKobo} < ${expectedKobo}`
+    );
     return NextResponse.json({ ok: true, ignored: "amount_mismatch" });
   }
 
@@ -76,19 +100,6 @@ export async function POST(req: NextRequest) {
     });
 
     if (shouldActivate) {
-      // Price and duration per plan, server-resolved.
-      let days: number;
-      let amountNaira: number;
-      if (plan === "premium_plus") {
-        days = config.premiumPlusDays;
-        amountNaira = config.premiumPlusMonthlyNaira;
-      } else if (plan === "monthly") {
-        days = config.monthlyDays;
-        amountNaira = config.monthlyPriceNaira;
-      } else {
-        days = config.weeklyDays;
-        amountNaira = config.weeklyPriceNaira;
-      }
       await activatePremiumForPayment({
         uid,
         durationDays: days,
@@ -100,8 +111,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[webhook] processing failed:", err);
-    // Non-200 makes Paystack retry; the paymentEvents gate keeps retries
-    // idempotent.
     return NextResponse.json({ ok: false, error: "Processing failed." }, { status: 500 });
   }
 }
