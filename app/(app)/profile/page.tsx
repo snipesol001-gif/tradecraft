@@ -5,10 +5,12 @@ import { CheckCircle2, Crown } from "lucide-react";
 import { getSessionUser } from "@/lib/session";
 import { getAdminApp } from "@/lib/firebase-admin";
 import { ensureReferralCode } from "@/lib/referral";
+import { getPremiumPlansConfig } from "@/lib/premium-config";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody } from "@/components/ui/card";
 import ProfileForm from "@/components/profile/profile-form";
 import ReferralCard from "@/components/profile/referral-card";
+import ExplorePremiumButton from "@/components/premium/explore-premium-button";
 import SignOutButton from "@/components/app/sign-out-button";
 
 function timeAgo(ms: number): string {
@@ -21,6 +23,7 @@ function timeAgo(ms: number): string {
   const d = Math.floor(h / 24);
   return `${d}d ago`;
 }
+
 export const metadata = { title: "Profile" };
 
 export default async function ProfilePage() {
@@ -37,7 +40,8 @@ export default async function ProfilePage() {
     .count()
     .get();
   const referralCount = countSnap.data().count;
-    const signinsSnap = await db
+
+  const signinsSnap = await db
     .collection("loginEvents")
     .where("uid", "==", sessionUser.uid)
     .orderBy("createdAt", "desc")
@@ -58,6 +62,8 @@ export default async function ProfilePage() {
   if (!referralCode) {
     referralCode = await ensureReferralCode(sessionUser.uid);
   }
+
+  const plansConfig = await getPremiumPlansConfig();
 
   const displayName = typeof d.displayName === "string" ? d.displayName : "";
   const initial = displayName.charAt(0).toUpperCase() || "T";
@@ -148,23 +154,14 @@ export default async function ProfilePage() {
         </div>
       </section>
 
-            {!sessionUser.premium && (
+      {!sessionUser.premium && (
         <section>
-          <Link href="/premium" className="block">
-            <Card variant="interactive" className="p-5">
-              <div className="flex items-center gap-4">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-sunken text-text-primary">
-                  <Crown size={20} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-text-primary">Explore Premium</p>
-                  <p className="mt-0.5 text-xs text-text-muted">
-                    The Website Analyzer, premium themes, and more.
-                  </p>
-                </div>
-              </div>
-            </Card>
-          </Link>
+          <ExplorePremiumButton
+            paymentsEnabled={plansConfig.paymentsEnabled}
+            weeklyPrice={plansConfig.weeklyPriceNaira}
+            monthlyPrice={plansConfig.monthlyPriceNaira}
+            premiumPlusPrice={plansConfig.premiumPlusMonthlyNaira}
+          />
         </section>
       )}
 
@@ -178,7 +175,7 @@ export default async function ProfilePage() {
         </div>
       </section>
 
-            <section>
+      <section>
         <p className="eyebrow">Recent sign-ins</p>
         <p className="mt-1 text-sm text-text-muted">
           Permanent security record. If you do not recognize an entry, reset
@@ -209,6 +206,7 @@ export default async function ProfilePage() {
           </CardBody>
         </Card>
       </section>
+
       <section className="pt-2">
         <div className="mx-auto max-w-xs">
           <SignOutButton />
