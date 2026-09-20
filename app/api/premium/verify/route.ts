@@ -1,7 +1,7 @@
-// Verifies a payment by reference (Paystack server-to-server), then
-// activates Premium exactly once. The paymentEvents document keyed by
-// reference is the activation gate: webhook and on-return verify race
-// here, and only one wins create().
+// Verifies a payment by reference, then activates the entitlement the
+// plan purchased: Premium (weekly/monthly) or Premium+. Exactly once,
+// via the paymentEvents gate. Amount checked against the config price
+// for the specific plan.
 
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
@@ -14,6 +14,12 @@ import {
   planPriceNaira,
 } from "@/lib/premium-config";
 import { activatePremiumForPayment } from "@/lib/premium";
+
+function planPriceFor(plan: string, config: ReturnType<typeof getPremiumPlansConfig> extends Promise<infer C> ? C : never): number {
+  // Overloaded at call sites with concrete config; kept simple.
+  return 0;
+}
+void planPriceFor;
 
 export async function GET(req: NextRequest) {
   const sessionUser = await getSessionUser(true);
@@ -41,7 +47,25 @@ export async function GET(req: NextRequest) {
   }
 
   const config = await getPremiumPlansConfig();
-  const expectedKobo = planPriceNaira(payment.plan, config) * 100;
+
+  // Resolve price and duration per plan.
+  let expectedKobo: number;
+  let days: number;
+  let amountNaira: number;
+  if (payment.plan === "premium_plus") {
+    expectedKobo = config.premiumPlusMonthlyNaira * 100;
+    days = config.premiumPlusDays;
+    amountNaira = config.premiumPlusMonthlyNaira;
+  } else if (payment.plan === "monthly") {
+    expectedKobo = config.monthlyPriceNaira * 100;
+    days = config.monthlyDays;
+    amountNaira = config.monthlyPriceNaira;
+  } else {
+    expectedKobo = config.weeklyPriceNaira * 100;
+    days = config.weeklyDays;
+    amountNaira = config.weeklyPriceNaira;
+  }
+
   if (payment.amountKobo < expectedKobo) {
     console.error(
       `[premium] amount mismatch on ${reference}: got ${payment.amountKobo}, expected ${expectedKobo}`
@@ -52,9 +76,6 @@ export async function GET(req: NextRequest) {
   const db = getFirestore(getAdminApp());
   const gateRef = db.collection("paymentEvents").doc(reference);
 
-  // The gate: create() inside the transaction only succeeds for the
-  // first processor of this reference. Everyone else sees it exists and
-  // stops. This is what makes webhook-and-verify races safe.
   let alreadyProcessed = false;
   try {
     await db.runTransaction(async (tx) => {
@@ -80,18 +101,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, alreadyProcessed: true });
   }
 
-  const days = planDays(payment.plan, config);
-  const amountNaira = planPriceNaira(payment.plan, config);
   const activation = await activatePremiumForPayment({
     uid: payment.uid,
     durationDays: days,
     reference,
     amountNaira,
+    plan: payment.plan,
   });
 
   return NextResponse.json({
     ok: true,
     activated: true,
+    plan: payment.plan,
     expiresAtMs: activation.expiresAtMs,
   });
 }

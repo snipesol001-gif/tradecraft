@@ -1,8 +1,7 @@
 // The payment provider contract. Paystack implements this today; another
-// provider (Flutterwave) would be one more adapter file plus a registry
-// line, not a rewrite.
+// provider would be one more adapter file plus a registry line.
 
-export type PremiumPlan = "weekly" | "monthly";
+export type PremiumPlan = "weekly" | "monthly" | "premium_plus";
 
 export type InitializedPayment = {
   authorizationUrl: string;

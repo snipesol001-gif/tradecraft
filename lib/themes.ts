@@ -1,7 +1,7 @@
 // The TradeCraft theme registry. Single source of truth for theme ids,
-// labels, tiers, and base modes. The pre-paint script in app/layout.tsx
-// mirrors the id-to-base map (it cannot import TypeScript), noted in both
-// places. Adding a theme later means: one entry here, one CSS block in
+// labels, tiers, base modes, and preview gradients. The pre-paint script
+// in app/layout.tsx mirrors the id-to-base map (it cannot import
+// TypeScript). Adding a theme: one entry here, one CSS block in
 // globals.css keyed by data-theme, one script map line. Entitlement and
 // persistence architecture never change.
 
@@ -12,22 +12,90 @@ export type ThemeDef = {
   label: string;
   tier: ThemeTier;
   base: "light" | "dark";
-  preview: { bg: string; surface: string; text: string };
+  // Miniature of the theme's real atmosphere, used by the gallery swatch.
+  previewGradient: string;
 };
 
 export const FREE_FALLBACK_THEME = "system";
 
 export const THEMES: ThemeDef[] = [
-  { id: "light", label: "Light", tier: "free", base: "light", preview: { bg: "#fafafa", surface: "#ffffff", text: "#0a0a0a" } },
-  { id: "dark", label: "Dark", tier: "free", base: "dark", preview: { bg: "#09090b", surface: "#18181b", text: "#f4f4f5" } },
-  { id: "system", label: "Automatic", tier: "free", base: "dark", preview: { bg: "#101012", surface: "#1c1c1f", text: "#ececee" } },
-  { id: "midnight", label: "Midnight", tier: "free", base: "dark", preview: { bg: "#060913", surface: "#131a2c", text: "#e5e9f2" } },
-  { id: "indigo-drift", label: "Indigo Drift", tier: "premium", base: "dark", preview: { bg: "#0a0a14", surface: "#1a1a2e", text: "#eceafd" } },
-  { id: "golden-horizon", label: "Golden Horizon", tier: "premium", base: "dark", preview: { bg: "#0f0c08", surface: "#201a14", text: "#f5efe2" } },
-  { id: "prism-glow", label: "Prism Glow", tier: "premium_plus", base: "dark", preview: { bg: "#0d0a14", surface: "#1e1730", text: "#f0eafd" } },
-  { id: "twilight-ember", label: "Twilight Ember", tier: "premium_plus", base: "dark", preview: { bg: "#120b0b", surface: "#261919", text: "#f7ecec" } },
-  { id: "abyssal-blue", label: "Abyssal Blue", tier: "premium_plus", base: "dark", preview: { bg: "#04101c", surface: "#0c2236", text: "#e2f0fa" } },
-  { id: "sakura-drift", label: "Sakura Drift", tier: "premium_plus", base: "light", preview: { bg: "#faf5f6", surface: "#ffffff", text: "#2b1e22" } },
+  {
+    id: "light",
+    label: "Light",
+    tier: "free",
+    base: "light",
+    previewGradient: "linear-gradient(180deg, #ffffff 0%, #f4f4f5 100%)",
+  },
+  {
+    id: "dark",
+    label: "Dark",
+    tier: "free",
+    base: "dark",
+    previewGradient: "linear-gradient(180deg, #1c1c1f 0%, #09090b 100%)",
+  },
+  {
+    id: "system",
+    label: "Automatic",
+    tier: "free",
+    base: "dark",
+    previewGradient:
+      "linear-gradient(135deg, #f4f4f5 0%, #f4f4f5 48%, #18181b 52%, #09090b 100%)",
+  },
+  {
+    id: "midnight",
+    label: "Midnight",
+    tier: "free",
+    base: "dark",
+    previewGradient: "linear-gradient(180deg, #131a2c 0%, #060913 100%)",
+  },
+  {
+    id: "indigo-drift",
+    label: "Indigo Drift",
+    tier: "premium",
+    base: "dark",
+    previewGradient:
+      "radial-gradient(ellipse 90% 70% at 20% -10%, rgba(150, 132, 255, 0.65), transparent 60%), radial-gradient(ellipse 70% 60% at 55% 115%, rgba(80, 50, 210, 0.5), transparent 68%), linear-gradient(168deg, #3b2a9e 0%, #241873 35%, #150e45 68%, #0a0626 100%)",
+  },
+  {
+    id: "golden-horizon",
+    label: "Golden Horizon",
+    tier: "premium",
+    base: "dark",
+    previewGradient:
+      "radial-gradient(ellipse 100% 70% at 50% 120%, rgba(255, 184, 74, 0.6), transparent 72%), radial-gradient(ellipse 60% 50% at 80% -10%, rgba(255, 204, 112, 0.35), transparent 65%), linear-gradient(170deg, #2a1f0a 0%, #17110a 65%, #0f0b05 100%)",
+  },
+  {
+    id: "prism-glow",
+    label: "Prism Glow",
+    tier: "premium_plus",
+    base: "dark",
+    previewGradient:
+      "radial-gradient(ellipse 70% 60% at 15% -10%, rgba(168, 148, 255, 0.55), transparent 60%), radial-gradient(ellipse 60% 55% at 95% 25%, rgba(90, 220, 208, 0.4), transparent 62%), radial-gradient(ellipse 70% 55% at 45% 120%, rgba(233, 128, 196, 0.42), transparent 64%), linear-gradient(165deg, #2a1c52 0%, #150d33 65%, #0e0926 100%)",
+  },
+  {
+    id: "twilight-ember",
+    label: "Twilight Ember",
+    tier: "premium_plus",
+    base: "dark",
+    previewGradient:
+      "radial-gradient(ellipse 90% 65% at 50% 125%, rgba(232, 92, 56, 0.55), transparent 70%), radial-gradient(ellipse 55% 45% at 88% -8%, rgba(214, 70, 90, 0.32), transparent 65%), linear-gradient(172deg, #3d1220 0%, #1d0a14 68%, #120710 100%)",
+  },
+  {
+    id: "abyssal-blue",
+    label: "Abyssal Blue",
+    tier: "premium_plus",
+    base: "dark",
+    previewGradient:
+      "radial-gradient(ellipse 90% 60% at 50% -12%, rgba(60, 190, 220, 0.48), transparent 64%), radial-gradient(ellipse 70% 55% at 5% 115%, rgba(10, 90, 120, 0.42), transparent 70%), linear-gradient(175deg, #0a2438 0%, #041222 62%, #020b16 100%)",
+  },
+  {
+    id: "sakura-drift",
+    label: "Sakura Drift",
+    tier: "premium_plus",
+    base: "light",
+    previewGradient:
+      "radial-gradient(ellipse 70% 60% at 8% -12%, rgba(228, 208, 248, 0.8), transparent 62%), radial-gradient(ellipse 80% 60% at 95% 115%, rgba(248, 205, 222, 0.7), transparent 68%), linear-gradient(168deg, #fdf7fa 0%, #faeef3 55%, #f7ecf2 100%)",
+  },
 ];
 
 export function getTheme(id: string): ThemeDef | null {

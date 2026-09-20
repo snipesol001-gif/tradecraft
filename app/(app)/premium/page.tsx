@@ -70,6 +70,11 @@ export default async function PremiumPage({
           paymentsEnabled={config.paymentsEnabled}
           weekly={{ price: config.weeklyPriceNaira, days: config.weeklyDays }}
           monthly={{ price: config.monthlyPriceNaira, days: config.monthlyDays }}
+          premiumPlus={{
+            price: config.premiumPlusMonthlyNaira,
+            days: config.premiumPlusDays,
+            enabled: config.premiumPlusEnabled,
+          }}
           pendingReference={ref ?? null}
         />
       )}

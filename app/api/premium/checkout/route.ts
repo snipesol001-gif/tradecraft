@@ -1,6 +1,6 @@
 // Starts a Premium checkout. Server-defined prices and reference; the
-// client never supplies an amount. Returns Paystack's hosted checkout
-// URL. Activation happens via webhook or on-return verify, never here.
+// client never supplies an amount. Three purchasable tiers: weekly
+// (Premium), monthly (legacy monthly), premium_plus.
 
 import { NextRequest, NextResponse } from "next/server";
 import { getAuth } from "firebase-admin/auth";
@@ -40,7 +40,8 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => null);
   const rawPlan = body?.plan;
-  if (rawPlan !== "weekly" && rawPlan !== "monthly") {
+  const valid: PremiumPlan[] = ["weekly", "monthly", "premium_plus"];
+  if (!valid.includes(rawPlan)) {
     return NextResponse.json({ ok: false, error: "Choose a plan." }, { status: 400 });
   }
   const plan: PremiumPlan = rawPlan;
@@ -52,13 +53,32 @@ export async function POST(req: NextRequest) {
       { status: 503 }
     );
   }
+  if (plan === "premium_plus" && !config.premiumPlusEnabled) {
+    return NextResponse.json(
+      { ok: false, error: "Premium+ is temporarily unavailable." },
+      { status: 503 }
+    );
+  }
 
   const premium = await getPremiumStatus(sessionUser.uid);
   if (premium.active) {
     return NextResponse.json({ ok: false, error: "ALREADY_PREMIUM" }, { status: 409 });
   }
 
-  const priceNaira = planPriceNaira(plan, config);
+  // Price and days resolve per plan, server-side.
+  let priceNaira: number;
+  let days: number;
+  if (plan === "premium_plus") {
+    priceNaira = config.premiumPlusMonthlyNaira;
+    days = config.premiumPlusDays;
+  } else if (plan === "monthly") {
+    priceNaira = config.monthlyPriceNaira;
+    days = config.monthlyDays;
+  } else {
+    priceNaira = config.weeklyPriceNaira;
+    days = config.weeklyDays;
+  }
+
   const reference = makeReference(plan, sessionUser.uid);
 
   const authUser = await getAuth(getAdminApp()).getUser(sessionUser.uid);
@@ -93,6 +113,6 @@ export async function POST(req: NextRequest) {
     reference: init.reference,
     plan,
     amountNaira: priceNaira,
-    days: planDays(plan, config),
+    days,
   });
 }

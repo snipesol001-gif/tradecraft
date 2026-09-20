@@ -76,9 +76,26 @@ export async function POST(req: NextRequest) {
     });
 
     if (shouldActivate) {
-      const days = planDays(plan, config);
-      const amountNaira = planPriceNaira(plan, config);
-      await activatePremiumForPayment({ uid, durationDays: days, reference, amountNaira });
+      // Price and duration per plan, server-resolved.
+      let days: number;
+      let amountNaira: number;
+      if (plan === "premium_plus") {
+        days = config.premiumPlusDays;
+        amountNaira = config.premiumPlusMonthlyNaira;
+      } else if (plan === "monthly") {
+        days = config.monthlyDays;
+        amountNaira = config.monthlyPriceNaira;
+      } else {
+        days = config.weeklyDays;
+        amountNaira = config.weeklyPriceNaira;
+      }
+      await activatePremiumForPayment({
+        uid,
+        durationDays: days,
+        reference,
+        amountNaira,
+        plan,
+      });
     }
     return NextResponse.json({ ok: true });
   } catch (err) {

@@ -154,6 +154,7 @@ export async function activatePremiumForPayment(params: {
   durationDays: number;
   reference: string;
   amountNaira: number;
+  plan?: string;
 }): Promise<{ expiresAtMs: number }> {
   const db = getFirestore(getAdminApp());
   const ref = db.collection("users").doc(params.uid);
@@ -166,9 +167,14 @@ export async function activatePremiumForPayment(params: {
       : now;
   const expiresAtMs = baseMs + params.durationDays * 24 * 60 * 60 * 1000;
 
+  const isPremiumPlus = params.plan === "premium_plus";
   await ref.set(
     {
       premium: { active: true, expiresAtMs, source: "subscription" },
+      premiumPlus: {
+        active: isPremiumPlus,
+        expiresAtMs: isPremiumPlus ? expiresAtMs : null,
+      },
       updatedAt: FieldValue.serverTimestamp(),
     },
     { merge: true }
