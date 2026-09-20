@@ -1,13 +1,10 @@
 // The Premium entitlement system. Server-side only.
 //
-// Source of truth: users/{uid}.premium.active plus premium.expiresAt.
+// Sources of truth: users/{uid}.premium.active plus premium.expiresAt.
 // The custom claim premium:true mirrors the document for fast gating,
-// but every durable check re-reads the document (claims are a hint,
-// the document is the truth, blueprint section 73).
-//
-// Expiry is lazy: any check that finds an expired grant flips it off in
-// the same operation (the proven credits-reset pattern). Admin grants
-// and revokes are audit-logged.
+// but durable checks re-read the document (blueprint section 73).
+// Expiry is lazy (the proven credits-reset pattern). Grants, revokes,
+// and paid activations are audited.
 
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
@@ -38,8 +35,6 @@ function readPremium(
   };
 }
 
-// The durable check. Reads the document, lazily expires stale grants,
-// syncs the custom claim when the state changes, and returns the truth.
 export async function getPremiumStatus(uid: string): Promise<PremiumStatus> {
   const db = getFirestore(getAdminApp());
   const ref = db.collection("users").doc(uid);
@@ -48,7 +43,6 @@ export async function getPremiumStatus(uid: string): Promise<PremiumStatus> {
   const status = readPremium(snap.data(), now);
 
   if (snap.data()?.premium?.active === true && status.active === false) {
-    // The stored grant expired: flip it off in place and sync the claim.
     await ref.set(
       { premium: { active: false, expiredAt: FieldValue.serverTimestamp() } },
       { merge: true }
@@ -63,8 +57,6 @@ export async function getPremiumStatus(uid: string): Promise<PremiumStatus> {
   return status;
 }
 
-// For use inside an existing transaction: read-only evaluation, no
-// writes. Callers handle their own claim syncing.
 export function evaluatePremium(
   data: Record<string, unknown> | undefined,
   nowMs: number
@@ -72,8 +64,14 @@ export function evaluatePremium(
   return readPremium(data, nowMs).active;
 }
 
-// Admin grant. Sets document fields, the claim, and writes an audit
-// record. durationDays: null means no expiry.
+async function syncPremiumClaim(uid: string, active: boolean): Promise<void> {
+  const authUser = await getAuth(getAdminApp()).getUser(uid);
+  await getAuth(getAdminApp()).setCustomUserClaims(uid, {
+    ...authUser.customClaims,
+    premium: active,
+  });
+}
+
 export async function grantPremium(params: {
   uid: string;
   actorUid: string;
@@ -83,26 +81,20 @@ export async function grantPremium(params: {
   const db = getFirestore(getAdminApp());
   const ref = db.collection("users").doc(params.uid);
   const expiresAtMs =
-    params.durationDays === null ? null : Date.now() + params.durationDays * 24 * 60 * 60 * 1000;
+    params.durationDays === null
+      ? null
+      : Date.now() + params.durationDays * 24 * 60 * 60 * 1000;
 
   await ref.set(
     {
-      premium: {
-        active: true,
-        expiresAtMs,
-        source: "admin",
-      },
+      premium: { active: true, expiresAtMs, source: "admin" },
       premiumGrantedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     },
     { merge: true }
   );
 
-  const authUser = await getAuth(getAdminApp()).getUser(params.uid);
-  await getAuth(getAdminApp()).setCustomUserClaims(params.uid, {
-    ...authUser.customClaims,
-    premium: true,
-  });
+  await syncPremiumClaim(params.uid, true);
 
   await db.collection("auditLogs").add({
     actorUid: params.actorUid,
@@ -127,7 +119,6 @@ export async function grantPremium(params: {
   });
 }
 
-// Admin revoke. Clears fields, the claim, and writes an audit record.
 export async function revokePremium(params: {
   uid: string;
   actorUid: string;
@@ -145,11 +136,7 @@ export async function revokePremium(params: {
     { merge: true }
   );
 
-  const authUser = await getAuth(getAdminApp()).getUser(params.uid);
-  await getAuth(getAdminApp()).setCustomUserClaims(params.uid, {
-    ...authUser.customClaims,
-    premium: false,
-  });
+  await syncPremiumClaim(params.uid, false);
 
   await db.collection("auditLogs").add({
     actorUid: params.actorUid,
@@ -158,4 +145,56 @@ export async function revokePremium(params: {
     reason: params.reason,
     createdAt: FieldValue.serverTimestamp(),
   });
+}
+
+// Paid activation. Extends from the current expiry when the user is
+// already premium, so renewals never lose days. Source: subscription.
+export async function activatePremiumForPayment(params: {
+  uid: string;
+  durationDays: number;
+  reference: string;
+  amountNaira: number;
+}): Promise<{ expiresAtMs: number }> {
+  const db = getFirestore(getAdminApp());
+  const ref = db.collection("users").doc(params.uid);
+  const snap = await ref.get();
+  const now = Date.now();
+  const current = readPremium(snap.data(), now);
+  const baseMs =
+    current.active && current.expiresAtMs !== null && current.expiresAtMs > now
+      ? current.expiresAtMs
+      : now;
+  const expiresAtMs = baseMs + params.durationDays * 24 * 60 * 60 * 1000;
+
+  await ref.set(
+    {
+      premium: { active: true, expiresAtMs, source: "subscription" },
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  await syncPremiumClaim(params.uid, true);
+
+  await db.collection("auditLogs").add({
+    actorUid: params.uid,
+    action: "premium_purchase",
+    targetUid: params.uid,
+    reference: params.reference,
+    amountNaira: params.amountNaira,
+    durationDays: params.durationDays,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  await db.collection("notifications").add({
+    uid: params.uid,
+    type: "premium_activated",
+    title: "Premium activated",
+    body: `Payment received. Premium is active until ${new Date(expiresAtMs).toLocaleDateString()}.`,
+    link: "/profile",
+    read: false,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return { expiresAtMs };
 }
